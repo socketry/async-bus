@@ -2,11 +2,11 @@
 
 Provides a distributed client-server bus for executing Ruby code.
 
-[![Development Status](https://github.com/socketry/supervisor/workflows/Development/badge.svg)](https://github.com/socketry/supervisor/actions?workflow=Development)
+[![Development Status](https://github.com/socketry/async-bus/workflows/Development/badge.svg)](https://github.com/socketry/async-bus/actions?workflow=Development)
 
 ## Installation
 
-``` shell
+```shell
 bundle add async-bus
 ```
 
@@ -14,34 +14,31 @@ bundle add async-bus
 
 ```ruby
 class Counter
-	def initialize(count = 0)
-		@count = count
-	end
-	
-	attr :count
-	
-	def increment
-		@count += 1
-	end
+  def initialize(count = 0)
+    @count = count
+  end
+
+  attr :count
+
+  def increment
+    @count += 1
+  end
 end
 
 server = Async::Bus::Server.new
 client = Async::Bus::Client.new
 
 # Server Process
-server_task = Async do
-	server.accept do |connection|
-		connection.bind(:counter, Counter.new)
-	end
-end
+server_task =
+  Async do
+    server.accept { |connection| connection.bind(:counter, Counter.new) }
+  end
 
 # Client Process
 client.connect do |connection|
-	3.times do
-		connection[:counter].increment
-	end
-	
-	expect(connection[:counter].count).to be == 3
+  3.times { connection[:counter].increment }
+
+  expect(connection[:counter].count).to be == 3
 end
 ```
 
@@ -53,4 +50,4 @@ To install this gem onto your local machine, run `bundle exec rake install`. To 
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/\[USERNAME\]/supervisor.
+Bug reports and pull requests are welcome on GitHub at https://github.com/socketry/async-bus.
