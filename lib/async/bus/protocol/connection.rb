@@ -54,7 +54,12 @@ module Async
 					@id = id
 					
 					@objects = {}
+					@proxies = ::ObjectSpace::WeakMap.new
+					@finalized = Thread::Queue.new
 				end
+				
+				attr :objects
+				attr :proxies
 				
 				attr :unpacker
 				attr :packer
@@ -69,7 +74,7 @@ module Async
 				attr :transactions
 				
 				def proxy(object)
-					name = "proxy:#{object_id}"
+					name = next_id.to_s(16).freeze
 					
 					bind(name, object)
 					
@@ -80,11 +85,22 @@ module Async
 					@objects[name] = object
 				end
 				
-				def [](name)
-					Proxy.new(self, name)
+				private def finalize(name)
+					proc{@finalized << name}
 				end
 				
-				def invoke(name, arguments, options, &block)
+				def [](name)
+					unless proxy = @proxies[name]
+						proxy = Proxy.new(self, name)
+						@proxies[name] = proxy
+						
+						ObjectSpace.define_finalizer(proxy, finalize(name))
+					end
+					
+					return proxy
+				end
+				
+				def invoke(name, arguments, options = {}, &block)
 					id = self.next_id
 					
 					transaction = Transaction.new(self, id)
@@ -94,11 +110,19 @@ module Async
 				end
 				
 				def run
-					# @unpacker.each do |message|
+					finalizer_task = Async do
+						while name = @finalized.pop
+							@packer.write([:release, name])
+						end
+					end
+					
 					@unpacker.each do |message|
 						id = message.shift
 						
-						if transaction = @transactions[id]
+						if id == :release
+							name = message.shift
+							@objects.delete(name) if name.is_a?(String)
+						elsif transaction = @transactions[id]
 							transaction.received.enqueue(message)
 						elsif message.first == :invoke
 							message.shift
@@ -119,11 +143,14 @@ module Async
 						end
 					end
 				ensure
+					finalizer_task.stop
+					
 					@transactions.each do |id, transaction|
 						transaction.close
 					end
 					
 					@transactions.clear
+					@proxies = ::ObjectSpace::WeakMap.new
 				end
 				
 				def close

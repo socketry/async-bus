@@ -13,6 +13,16 @@ class Counter
 	def increment
 		@count += 1
 	end
+	
+	def each
+		@count.times do
+			yield Object.new
+		end
+	end
+	
+	def make
+		Object.new
+	end
 end
 
 RSpec.describe Async::Bus::Server do
@@ -37,7 +47,7 @@ RSpec.describe Async::Bus::Server do
 		end
 	end
 	
-	it "can return rich objects" do
+	it "can return proxy objects" do
 		server = Async::Bus::Server.new
 		client = Async::Bus::Client.new
 		
@@ -56,6 +66,30 @@ RSpec.describe Async::Bus::Server do
 			end
 			
 			expect(counter.count).to be == 3
+		end
+	end
+	
+	it "can release proxy objects" do
+		server = Async::Bus::Server.new
+		client = Async::Bus::Client.new
+		
+		server_task = Async do
+			server.accept do |connection|
+				connection.bind(:counter, Counter)
+				
+				connection.bind(:objects, connection.objects)
+			end
+		end
+		
+		client.connect do |connection|
+			counter = connection[:counter].new(10)
+			
+			10.times do
+				counter.make
+				GC.start
+			end
+			
+			expect(connection[:objects].size).to be < 10
 		end
 	end
 end
