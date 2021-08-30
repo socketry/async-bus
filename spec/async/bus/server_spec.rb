@@ -36,4 +36,26 @@ RSpec.describe Async::Bus::Server do
 			expect(connection[:counter].count).to be == 3
 		end
 	end
+	
+	it "can return rich objects" do
+		server = Async::Bus::Server.new
+		client = Async::Bus::Client.new
+		
+		server_task = Async do
+			server.accept do |connection|
+				connection.bind(:counter, Counter)
+			end
+		end
+		
+		client.connect do |connection|
+			counter = connection[:counter].new
+			puts counter.inspect
+			
+			3.times do
+				counter.increment
+			end
+			
+			expect(counter.count).to be == 3
+		end
+	end
 end
