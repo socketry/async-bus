@@ -101,6 +101,7 @@ module Async
 				end
 				
 				def invoke(name, arguments, options = {}, &block)
+					
 					id = self.next_id
 					
 					transaction = Transaction.new(self, id)

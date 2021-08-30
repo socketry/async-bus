@@ -61,6 +61,8 @@ module Async
 				
 				# Invoke a remote procedure.
 				def invoke(name, arguments, options, &block)
+					Console.logger.debug(self) {[name, arguments, options, block]}
+					
 					self.write(:invoke, name, arguments, options, block_given?)
 					
 					while response = self.read

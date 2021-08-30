@@ -59,7 +59,6 @@ RSpec.describe Async::Bus::Server do
 		
 		client.connect do |connection|
 			counter = connection[:counter].new
-			puts counter.inspect
 			
 			3.times do
 				counter.increment
