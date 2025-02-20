@@ -1,26 +1,10 @@
 # frozen_string_literal: true
 
-# Copyright, 2021, by Samuel G. D. Williams. <http://www.codeotaku.com>
-# 
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-# 
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-# 
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
+# Released under the MIT License.
+# Copyright, 2021-2025, by Samuel Williams.
 
-require 'msgpack'
+require "msgpack"
+require_relative "proxy"
 
 module Async
 	module Bus
@@ -31,20 +15,29 @@ module Async
 					
 					@bus = bus
 					
-					self.register_type(0x00, Object,
-						packer: @bus.method(:proxy),
-						unpacker: @bus.method(:[])
+					# The order here matters.
+					
+					# Reverse serialize proxies back into objects:
+					self.register_type(0x01, Proxy,
+						packer: ->(proxy){proxy.__name__},
+						unpacker: @bus.method(:object),
 					)
 					
-					self.register_type(0x01, Symbol)
-					self.register_type(0x02, Exception,
+					self.register_type(0x02, Symbol)
+					self.register_type(0x03, Exception,
 						packer: ->(exception){Marshal.dump(exception)},
 						unpacker: ->(data){Marshal.load(data)},
 					)
 					
-					self.register_type(0x03, Class,
+					self.register_type(0x04, Class,
 						packer: ->(klass){Marshal.dump(klass)},
 						unpacker: ->(data){Marshal.load(data)},
+					)
+					
+					# Serialize objects into proxies:
+					self.register_type(0x0F, Object,
+						packer: @bus.method(:proxy),
+						unpacker: @bus.method(:[])
 					)
 				end
 			end
