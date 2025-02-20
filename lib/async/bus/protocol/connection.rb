@@ -130,7 +130,7 @@ module Async
 						end
 					end
 				ensure
-					finalizer_task.stop
+					finalizer_task&.stop
 					
 					@transactions.each do |id, transaction|
 						transaction.close

@@ -6,7 +6,14 @@
 module Async
 	module Bus
 		module Protocol
+			# A proxy object that forwards method calls to a remote object.
+			#
+			# We must be extremely careful not to invoke any methods on the proxy object that would recursively call the proxy object.
 			class Proxy < BasicObject
+				# Create a new proxy object.
+				#
+				# @parameter connection [Connection] The connection to the remote object.
+				# @parameter name [Symbol] The name (address) of the remote object.
 				def initialize(connection, name)
 					@connection = connection
 					@name = name
@@ -28,24 +35,7 @@ module Async
 					@connection.invoke(@name, [:!=, object])
 				end
 				
-				def eql?(other)
-					self.equal?(other)
-				end
-				
-				def methods(all = true)
-					@connection.invoke(@name, [:methods, all])
-				end
-				
-				def protected_methods(all = true)
-					@connection.invoke(@name, [:protected_methods, all])
-				end
-				
-				def public_methods(all = true)
-					@connection.invoke(@name, [:public_methods, all])
-				end
-				
 				def method_missing(*arguments, **options, &block)
-					$stderr.puts "invoke #{@name}.#{arguments}"
 					@connection.invoke(@name, arguments, options, &block)
 				end
 				

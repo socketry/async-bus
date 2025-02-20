@@ -3,152 +3,117 @@
 # Released under the MIT License.
 # Copyright, 2021-2025, by Samuel Williams.
 
-require "async/bus/server"
-require "async/bus/client"
-
-require "sus/fixtures/async"
-require "tmpdir"
-require "io/endpoint/bound_endpoint"
-
-class Counter
-	def initialize(count = 0)
-		@count = count
-	end
-	
-	attr :count
-	
-	def increment
-		@count += 1
-	end
-	
-	def each
-		@count.times do
-			yield Object.new
-		end
-	end
-	
-	def make
-		Object.new
-	end
-	
-	def itself(object)
-		return object
-	end
-	
-	def error(message)
-		raise message
-	end
-end
+require "async/bus/a_server"
 
 describe Async::Bus::Server do
-	include Sus::Fixtures::Async::ReactorContext
+	include Async::Bus::AServer
 	
-	let(:ipc_path) {File.join(@root, "bus.ipc")}
-	let(:endpoint) {Async::Bus::Protocol.local_endpoint(ipc_path)}
-	
-	def around(&block)
-		Dir.mktmpdir do |directory|
-			@root = directory
-			super(&block)
+	with "#bind" do
+		it "can receive incoming clients and expose a bound object" do
+			server_task = Async do
+				server.accept do |connection|
+					connection.bind(:object, Object.new)
+				end
+			end
+			
+			client.connect do |connection|
+				expect(connection[:object]).to be_a(Object)
+			end
 		end
 	end
 	
-	def before
-		@bound_endpoint = endpoint.bound
-	end
-	
-	def after(error = nil)
-		@bound_endpoint&.close
-	end
-	
-	let(:server) {Async::Bus::Server.new(@bound_endpoint)}
-	let(:client) {Async::Bus::Client.new(endpoint)}
-	
-	it "can receive incoming clients" do
-		server_task = Async do
-			server.accept do |connection|
-				connection.bind(:counter, Counter.new)
+	with "a bound Array instance" do
+		let(:array) {Array.new}
+		
+		def before
+			super
+			
+			@server_task = Async do
+				server.accept do |connection|
+					connection.bind(:array, array)
+				end
 			end
 		end
 		
-		client.connect do |connection|
-			3.times do
-				connection[:counter].increment
+		def after(error = nil)
+			@server_task.stop
+			
+			super
+		end
+		
+		it "can add items to the array" do
+			client.connect do |connection|
+				connection[:array] << 1
 			end
 			
-			expect(connection[:counter].count).to be == 3
+			expect(array).to be == [1]
 		end
-	end
-	
-	it "can return proxy objects" do
-		server_task = Async do
-			server.accept do |connection|
-				connection.bind(:counter, Counter)
+		
+		it "can use equality operators" do
+			array << 1
+			
+			client.connect do |connection|
+				expect(connection[:array] == [1]).to be_truthy
+				expect(connection[:array] != [2]).to be_truthy
 			end
 		end
 		
-		client.connect do |connection|
-			counter = connection[:counter].new
+		it "can enumerate items in the array" do
+			array << 1 << 2 << 3
+			enumerated = []
 			
-			3.times do
-				counter.increment
+			client.connect do |connection|
+				connection[:array].each do |item|
+					enumerated << item
+				end
 			end
 			
-			expect(counter.count).to be == 3
+			expect(enumerated).to be == [1, 2, 3]
 		end
-	end
-	
-	it "can return the original object" do
-		server_task = Async do
-			server.accept do |connection|
-				connection.bind(:counter, Counter)
+		
+		it "can raise an exception" do
+			client.connect do |connection|
+				expect do
+					connection[:array]["one"]
+				end.to raise_exception(TypeError, message: be =~ /no implicit conversion of String into Integer/)
 			end
 		end
 		
-		client.connect do |connection|
-			counter = connection[:counter].new
-			object = Object.new
-			
-			object2 = counter.itself(object)
-			
-			expect(object).to be_equal(object2)
-		end
-	end
-	
-	it "can raise error" do
-		server_task = Async do
-			server.accept do |connection|
-				connection.bind(:counter, Counter)
+		it "can get all methods" do
+			client.connect do |connection|
+				expect(connection[:array].methods).to be == array.methods
+				expect(connection[:array].public_methods).to be == array.public_methods
+				expect(connection[:array].protected_methods).to be == array.protected_methods
+				expect(connection[:array].private_methods).to be == array.private_methods
 			end
 		end
 		
-		client.connect do |connection|
-			counter = connection[:counter].new
-			
-			expect do
-				counter.error("Hello")
-			end.to raise_exception(RuntimeError, message: be =~ /Hello/)
+		it "can check if it responds to methods" do
+			client.connect do |connection|
+				expect(connection[:array].respond_to?(:each)).to be_truthy
+				expect(connection[:array].respond_to?(:no_such_method)).to be_falsey
+			end
 		end
-	end
-	
-	it "can release proxy objects" do
-		server_task = Async do
-			server.accept do |connection|
-				connection.bind(:counter, Counter)
+		
+		it "can get a method instance and call it" do
+			array << 1 << 2 << 3
+			enumerated = []
+			
+			client.connect do |connection|
+				method = connection[:array].method(:each)
 				
-				connection.bind(:objects, connection.objects)
+				method.call do |item|
+					enumerated << item
+				end
 			end
+			
+			expect(enumerated).to be == [1, 2, 3]
 		end
 		
-		client.connect do |connection|
-			counter = connection[:counter].new(10)
-			
-			10.times do
-				counter.make
-				GC.start
+		it "has a __name__" do
+			client.connect do |connection|
+				expect(connection[:array].__name__).to be == :array
 			end
-			
-			expect(connection[:objects].size).to be < 10
 		end
 	end
 end
