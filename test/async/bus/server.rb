@@ -5,6 +5,20 @@
 
 require "async/bus/a_server"
 
+class MyArray
+	def initialize
+		@values = []
+	end
+	
+	def sum
+		@values.sum
+	end
+	
+	def <<(value)
+		@values << value
+	end
+end
+
 describe Async::Bus::Server do
 	include Async::Bus::AServer
 	
@@ -113,6 +127,43 @@ describe Async::Bus::Server do
 		it "has a __name__" do
 			client.connect do |connection|
 				expect(connection[:array].__name__).to be == :array
+			end
+		end
+	end
+	
+	with "a bound Hash instance" do
+		let(:hash) {Hash.new}
+		
+		def before
+			super
+			
+			@server_task = Async do
+				server.accept do |connection|
+					connection.bind(:hash, hash)
+					connection.bind(:sum_key, proc{|key| hash[key].sum})
+				end
+			end
+		end
+		
+		def after(error = nil)
+			@server_task.stop
+		end
+		
+		it "can assign a local object to the hash" do
+			# We can't use a primitive type here, because it will be serialized and deserialized (e.g. copied), losing the object reference.
+			array = MyArray.new
+			
+			client.connect do |connection|
+				# As an array is a primitve type, we must force it to be a proxy:
+				connection[:hash][:array] = array
+				
+				expect(connection[:sum_key].call(:array)).to be == 0
+				
+				array << 1 << 2 << 3
+				
+				expect(connection[:sum_key].call(:array)).to be == 6
+				
+				expect(connection.transactions).to be(:empty?)
 			end
 		end
 	end

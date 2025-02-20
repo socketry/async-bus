@@ -11,21 +11,16 @@ module Async
 		class Server
 			def initialize(endpoint = nil)
 				@endpoint = endpoint || Protocol.local_endpoint
-				@connected = {}
 			end
-			
-			attr :connected
 			
 			def accept
 				@endpoint.accept do |peer|
 					connection = Protocol::Connection.server(peer)
-					@connected[peer] = connection
 					
 					yield connection
 					
 					connection.run
 				ensure
-					connection = @connected.delete(peer)
 					connection&.close
 				end
 			end

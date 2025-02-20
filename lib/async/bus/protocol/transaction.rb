@@ -29,16 +29,18 @@ module Async
 				end
 				
 				def write(*arguments)
-					@connection.packer.write([id, *arguments])
-					@connection.packer.flush
+					if @connection
+						@connection.packer.write([id, *arguments])
+						@connection.packer.flush
+					else
+						raise RuntimeError, "Transaction is closed!"
+					end
 				end
 				
 				def close
-					if @connection
-						@received.enqueue(nil)
-						
-						connection = @connection
+					if connection = @connection
 						@connection = nil
+						@received.enqueue(nil)
 						
 						connection.transactions.delete(@id)
 					end
@@ -46,7 +48,7 @@ module Async
 				
 				# Invoke a remote procedure.
 				def invoke(name, arguments, options, &block)
-					Console.logger.debug(self) {[name, arguments, options, block]}
+					Console.debug(self) {[name, arguments, options, block]}
 					
 					self.write(:invoke, name, arguments, options, block_given?)
 					
@@ -68,8 +70,8 @@ module Async
 						end
 					end
 					
-					# ensure
-					# 	self.write(:close)
+				# ensure
+				# 	self.write(:close)
 				end
 				
 				# Accept a remote procedure invokation.
@@ -97,8 +99,8 @@ module Async
 					self.write(:throw, error.tag)
 				rescue => error
 					self.write(:error, error)
-					# ensure
-					# 	self.write(:close)
+				# ensure
+				# 	self.write(:close)
 				end
 			end
 		end

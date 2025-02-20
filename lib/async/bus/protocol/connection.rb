@@ -56,6 +56,9 @@ module Async
 				
 				attr :transactions
 				
+				# Bind a local object to a name, such that it could be accessed remotely.
+				#
+				# @returns [String] The (unique) name of the object.
 				def proxy(object)
 					name = "<#{object.class}@#{next_id.to_s(16)}>".freeze
 					
@@ -94,6 +97,8 @@ module Async
 					@transactions[id] = transaction
 					
 					transaction.invoke(name, arguments, options, &block)
+				ensure
+					transaction&.close
 				end
 				
 				def run
@@ -123,6 +128,7 @@ module Async
 							Async do
 								transaction.accept(object, *message)
 							ensure
+								# This will also delete the transaction from @transactions:
 								transaction.close
 							end
 						else
