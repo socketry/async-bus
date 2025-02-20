@@ -5,9 +5,10 @@ def server
 	
 	Async do
 		server = Async::Bus::Server.new
+		things = Array.new
 		
 		server.accept do |connection|
-			binding.irb
+			connection[:things] = things
 		end
 	end
 end

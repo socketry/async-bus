@@ -22,16 +22,17 @@ module Async
 				
 				def read
 					if @received.empty?
-						@connection.packer.flush
+						@connection.flush
 					end
 					
 					@received.dequeue
 				end
 				
-				def write(*arguments)
+				def write(message)
+					# $stderr.puts "Transaction Writing: #{message.inspect}"
+					
 					if @connection
-						@connection.packer.write([id, *arguments])
-						@connection.packer.flush
+						@connection.write(message)
 					else
 						raise RuntimeError, "Transaction is closed!"
 					end
@@ -50,23 +51,21 @@ module Async
 				def invoke(name, arguments, options, &block)
 					Console.debug(self) {[name, arguments, options, block]}
 					
-					self.write(:invoke, name, arguments, options, block_given?)
+					self.write(Invoke.new(@id, name, arguments, options, block_given?))
 					
 					while response = self.read
-						what, result = response
-						
-						case what
-						when :error
-							raise(result)
-						when :return
-							return(result)
-						when :yield
+						case response
+						when Return
+							return response.result
+						when Yield
 							begin
-								result = yield(*result)
-								self.write(:next, result)
+								result = yield(*response.result)
+								self.write(Next.new(@id, result))
 							rescue => error
-								self.write(:error, error)
+								self.write(Error.new(@id, error))
 							end
+						when Error
+							raise(response.result)
 						end
 					end
 					
@@ -75,30 +74,31 @@ module Async
 				end
 				
 				# Accept a remote procedure invokation.
-				def accept(object, arguments, options, block)
-					if block
+				def accept(object, arguments, options, block_given)
+					if block_given
 						result = object.public_send(*arguments, **options) do |*yield_arguments|
-							self.write(:yield, yield_arguments)
-							what, result = self.read
+							self.write(Yield.new(@id, yield_arguments))
 							
-							case what
-							when :next
-								result
-							when :close
-								return
-							when :error
-								raise(result)
+							response = self.read
+							
+							case response
+							when Next
+								response.result
+							when Error
+								raise(response.result)
+							when Close
+								break
 							end
 						end
 					else
 						result = object.public_send(*arguments, **options)
 					end
 					
-					self.write(:return, result)
+					self.write(Return.new(@id, result))
 				rescue UncaughtThrowError => error
-					self.write(:throw, error.tag)
+					self.write(Throw.new(@id, error.tag))
 				rescue => error
-					self.write(:error, error)
+					self.write(Error.new(@id, error))
 				# ensure
 				# 	self.write(:close)
 				end

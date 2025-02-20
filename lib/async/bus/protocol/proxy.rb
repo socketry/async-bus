@@ -46,6 +46,10 @@ module Async
 				def respond_to_missing?(name, include_all = false)
 					@connection.invoke(@name, [:respond_to?, name, include_all])
 				end
+				
+				def inspect
+					"#<proxy #{@name}>"
+				end
 			end
 		end
 	end

@@ -41,6 +41,20 @@ module Async
 					@finalized = ::Thread::Queue.new
 				end
 				
+				def flush
+					@packer.flush
+				end
+				
+				def write(message)
+					# $stderr.puts "Writing: #{message.inspect}"
+					@packer.write(message)
+					@packer.flush
+				end
+				
+				def inspect
+					"#<#{self.class} #{@objects.size} objects>"
+				end
+				
 				attr :objects
 				attr :proxies
 				
@@ -79,6 +93,10 @@ module Async
 					proc{@finalized << name}
 				end
 				
+				def []=(name, object)
+					@objects[name] = object
+				end
+				
 				def [](name)
 					unless proxy = @proxies[name]
 						proxy = Proxy.new(self, name)
@@ -92,6 +110,7 @@ module Async
 				
 				def invoke(name, arguments, options = {}, &block)
 					id = self.next_id
+					# $stderr.puts "-> Invoking: #{name} #{arguments.inspect} #{options.inspect}", caller
 					
 					transaction = Transaction.new(self, id)
 					@transactions[id] = transaction
@@ -99,40 +118,39 @@ module Async
 					transaction.invoke(name, arguments, options, &block)
 				ensure
 					transaction&.close
+					# $stderr.puts "<- Invoked: #{name}"
 				end
 				
 				def run
 					finalizer_task = Async do
 						while name = @finalized.pop
-							@packer.write([:release, name])
+							self.write(Release.new(name))
 						end
 					end
 					
 					@unpacker.each do |message|
-						id = message.shift
+						# $stderr.puts "Message received: #{message.inspect}"
 						
-						if id == :release
-							name = message.shift
-							@objects.delete(name) if name.is_a?(String)
-						elsif transaction = @transactions[id]
-							transaction.received.enqueue(message)
-						elsif message.first == :invoke
-							message.shift
+						case message
+						when Release
+							@objects.delete(message.name)
+						when Invoke
+							transaction = Transaction.new(self, message.id)
+							@transactions[message.id] = transaction
 							
-							transaction = Transaction.new(self, id)
-							@transactions[id] = transaction
-							
-							name = message.shift
-							object = @objects[name]
+							object = @objects[message.name]
 							
 							Async do
-								transaction.accept(object, *message)
+								# $stderr.puts "-> Accepting: #{message.name} #{message.arguments.inspect} #{message.options.inspect}"
+								transaction.accept(object, message.arguments, message.options, message.block_given)
 							ensure
+								# $stderr.puts "<- Accepted: #{message.name}"
 								# This will also delete the transaction from @transactions:
 								transaction.close
 							end
 						else
-							raise "Out of order message: #{message}"
+							transaction = @transactions[message.id]
+							transaction.received.enqueue(message)
 						end
 					end
 				ensure
