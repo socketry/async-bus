@@ -19,8 +19,13 @@ module Async
 					@accept = nil
 				end
 				
+				attr :connection
 				attr :id
+				
+				attr_accessor :timeout
+				
 				attr :received
+				attr :accept
 				
 				def read
 					if @received.empty?
@@ -36,6 +41,14 @@ module Async
 					else
 						raise RuntimeError, "Transaction is closed!"
 					end
+				end
+				
+				# Push a message to the transaction's received queue.
+				# Silently ignores messages if the queue is already closed.
+				def push(message)
+					@received.push(message)
+				rescue ClosedQueueError
+					# Queue is closed (transaction already finished/closed) - ignore silently.
 				end
 				
 				def close
@@ -68,9 +81,6 @@ module Async
 							raise(response.result)
 						end
 					end
-					
-					# ensure
-					# 	self.write(:close)
 				end
 				
 				# Accept a remote procedure invokation.
@@ -99,8 +109,6 @@ module Async
 					self.write(Throw.new(@id, error.tag))
 				rescue => error
 					self.write(Error.new(@id, error))
-					# ensure
-					# 	self.write(:close)
 				end
 			end
 		end
