@@ -18,18 +18,18 @@ module Async
 			end
 			
 			class Connection
-				def self.client(peer)
-					self.new(peer, 1)
+				def self.client(peer, **options)
+					self.new(peer, 1, **options)
 				end
 				
-				def self.server(peer)
-					self.new(peer, 2)
+				def self.server(peer, **options)
+					self.new(peer, 2, **options)
 				end
 				
-				def initialize(peer, id)
+				def initialize(peer, id, wrapper: Wrapper)
 					@peer = peer
 					
-					@wrapper = Wrapper.new(self)
+					@wrapper = wrapper.new(self)
 					@unpacker = @wrapper.unpacker(peer)
 					@packer = @wrapper.packer(peer)
 					
@@ -72,21 +72,33 @@ module Async
 				
 				# Bind a local object to a name, such that it could be accessed remotely.
 				#
-				# @returns [String] The (unique) name of the object.
+				# @returns [Proxy] A proxy instance for the bound object.
+				def bind(name, object)
+					@objects[name] = object
+					return self[name]
+				end
+				
+				# Generate a proxy name for an object and bind it.
+				#
+				# @returns [Proxy] A proxy instance for the bound object.
 				def proxy(object)
 					name = "<#{object.class}@#{next_id.to_s(16)}>".freeze
 					
+					return bind(name, object)
+				end
+				
+				# Generate a proxy name for an object and bind it, returning just the name.
+				# Used for serialization when you need the name string, not a Proxy instance.
+				#
+				# @returns [String] The name of the bound object.
+				def proxy_name(object)
+					name = "<#{object.class}@#{next_id.to_s(16)}>".freeze
 					bind(name, object)
-					
 					return name
 				end
 				
 				def object(name)
 					@objects[name]
-				end
-				
-				def bind(name, object)
-					@objects[name] = object
 				end
 				
 				private def finalize(name)
@@ -102,7 +114,7 @@ module Async
 						proxy = Proxy.new(self, name)
 						@proxies[name] = proxy
 						
-						ObjectSpace.define_finalizer(proxy, finalize(name))
+						::ObjectSpace.define_finalizer(proxy, finalize(name))
 					end
 					
 					return proxy
@@ -150,7 +162,7 @@ module Async
 							end
 						else
 							transaction = @transactions[message.id]
-							transaction.received.enqueue(message)
+							transaction.received.push(message)
 						end
 					end
 				ensure

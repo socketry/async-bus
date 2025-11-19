@@ -48,7 +48,7 @@ module Async
 				end
 				
 				def inspect
-					"#<proxy #{@name}>"
+					"#<proxy #{@name}: #{@connection.invoke(@name, [:inspect])}>"
 				end
 			end
 		end

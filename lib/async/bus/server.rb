@@ -9,13 +9,14 @@ require "set"
 module Async
 	module Bus
 		class Server
-			def initialize(endpoint = nil)
+			def initialize(endpoint = nil, **options)
 				@endpoint = endpoint || Protocol.local_endpoint
+				@options = options
 			end
 			
 			def accept
 				@endpoint.accept do |peer|
-					connection = Protocol::Connection.server(peer)
+					connection = Protocol::Connection.server(peer, **@options)
 					
 					yield connection
 					
