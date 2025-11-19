@@ -14,6 +14,22 @@ module Async
 				@options = options
 			end
 			
+			# Called when a connection is established.
+			# Override this method to perform setup when a connection is established.
+			#
+			# @parameter connection [Protocol::Connection] The established connection.
+			protected def connected!(connection)
+				# Do nothing by default.
+			end
+			
+			# Create a new connection to the server.
+			#
+			# @returns [Protocol::Connection] The new connection.
+			protected def connect!
+				peer = @endpoint.connect
+				return Protocol::Connection.client(peer, **@options)
+			end
+			
 			# @parameter persist [Boolean] Whether to keep the connection open indefiniely.
 			def connect(persist = false)
 				@endpoint.connect do |peer|
@@ -30,6 +46,40 @@ module Async
 					end
 				ensure
 					connection_task&.stop
+					connection&.close
+				end
+			end
+			
+			# Run the client in a loop, reconnecting if necessary.
+			#
+			# Automatically reconnects when the connection fails, with random backoff.
+			# This is useful for long-running clients that need to maintain a persistent connection.
+			#
+			# @parameter parent [Async::Task] The parent task to run under.
+			def run(parent: Task.current)
+				parent.async(annotation: "Bus Client", transient: true) do |task|
+					loop do
+						connection = nil
+						connected_task = nil
+						begin
+							connection = connect!
+							
+							connected_task = task.async do
+								connected!(connection)
+							end
+							
+							connection.run(parent: Task.current)
+						rescue => error
+							Console.error(self, "Connection failed:", exception: error)
+							sleep(rand)
+						ensure
+							# Ensure any tasks that were created during connection are stopped:
+							connected_task&.stop
+							
+							# Close the connection itself:
+							connection&.close
+						end
+					end
 				end
 			end
 		end

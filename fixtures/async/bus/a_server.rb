@@ -31,10 +31,19 @@ module Async
 			
 			def after(error = nil)
 				@bound_endpoint&.close
+				@server_task&.stop
 			end
 			
 			let(:server) {Async::Bus::Server.new(@bound_endpoint)}
 			let(:client) {Async::Bus::Client.new(endpoint)}
+
+			def start_server
+				@server_task = Async do
+					server.accept do |connection|
+						yield connection
+					end
+				end
+			end
 		end
 	end
 end

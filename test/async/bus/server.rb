@@ -125,7 +125,7 @@ describe Async::Bus::Server do
 			@server_task = Async do
 				server.accept do |connection|
 					connection.bind(:hash, hash)
-					connection.bind(:sum_key, proc{|key| hash[key].sum})
+					connection.bind(:sum_key, proc {|key| hash[key].sum})
 				end
 			end
 		end

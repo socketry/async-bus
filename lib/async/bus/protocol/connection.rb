@@ -9,6 +9,7 @@ require "io/endpoint/unix_endpoint"
 require_relative "wrapper"
 require_relative "transaction"
 require_relative "proxy"
+require_relative "response"
 
 module Async
 	module Bus
@@ -26,20 +27,25 @@ module Async
 					self.new(peer, 2, **options)
 				end
 				
-				def initialize(peer, id, wrapper: Wrapper)
+				def initialize(peer, id, wrapper: Wrapper, timeout: nil)
 					@peer = peer
-					
+					@id = id
+
 					@wrapper = wrapper.new(self)
 					@unpacker = @wrapper.unpacker(peer)
 					@packer = @wrapper.packer(peer)
 					
+					@timeout = timeout
+
 					@transactions = {}
-					@id = id
 					
 					@objects = {}
 					@proxies = ::ObjectSpace::WeakMap.new
 					@finalized = ::Thread::Queue.new
 				end
+
+				# @attribute [Float] The timeout for transactions.
+				attr_accessor :timeout
 				
 				def flush
 					@packer.flush
@@ -102,7 +108,9 @@ module Async
 				end
 				
 				private def finalize(name)
-					proc{@finalized << name}
+					proc do
+						@finalized.push(name) rescue nil
+					end
 				end
 				
 				def []=(name, object)
@@ -124,7 +132,7 @@ module Async
 					id = self.next_id
 					# $stderr.puts "-> Invoking: #{name} #{arguments.inspect} #{options.inspect}", caller
 					
-					transaction = Transaction.new(self, id)
+					transaction = Transaction.new(self, id, timeout: @timeout)
 					@transactions[id] = transaction
 					
 					transaction.invoke(name, arguments, options, &block)
@@ -133,8 +141,8 @@ module Async
 					# $stderr.puts "<- Invoked: #{name}"
 				end
 				
-				def run
-					finalizer_task = Async do
+				def run(parent: Task.current)
+					finalizer_task = parent.async do
 						while name = @finalized.pop
 							self.write(Release.new(name))
 						end
@@ -147,22 +155,30 @@ module Async
 						when Release
 							@objects.delete(message.name)
 						when Invoke
-							transaction = Transaction.new(self, message.id)
-							@transactions[message.id] = transaction
-							
-							object = @objects[message.name]
-							
-							Async do
-								# $stderr.puts "-> Accepting: #{message.name} #{message.arguments.inspect} #{message.options.inspect}"
-								transaction.accept(object, message.arguments, message.options, message.block_given)
-							ensure
-								# $stderr.puts "<- Accepted: #{message.name}"
-								# This will also delete the transaction from @transactions:
-								transaction.close
+							# If the object is not found, send an error response and skip the transaction:
+							if object = @objects[message.name]
+								transaction = Transaction.new(self, message.id, timeout: @timeout)
+								@transactions[message.id] = transaction
+								
+								parent.async(annotation: "Invoke #{message.name}") do
+									# $stderr.puts "-> Accepting: #{message.name} #{message.arguments.inspect} #{message.options.inspect}"
+									transaction.accept(object, message.arguments, message.options, message.block_given)
+								ensure
+									# $stderr.puts "<- Accepted: #{message.name}"
+									# This will also delete the transaction from @transactions:
+									transaction.close
+								end
+							else
+								self.write(Error.new(message.id, NameError.new("Object not found: #{message.name}")))
+							end
+						when Response
+							if transaction = @transactions[message.id]
+								transaction.push(message)
+							else
+								# Stale message - transaction already closed (e.g. timeout) or never existed (ignore silently).
 							end
 						else
-							transaction = @transactions[message.id]
-							transaction.received.push(message)
+							Console.error(self, "Unexpected message:", message)
 						end
 					end
 				ensure

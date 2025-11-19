@@ -10,7 +10,7 @@ class FakeBus
 	def initialize
 		@objects = {}
 	end
-
+	
 	def proxy_name(object)
 		name = "<#{object.class}@#{object.object_id}>"
 		@objects[name] = object
@@ -58,7 +58,7 @@ describe Async::Bus::Protocol::Wrapper do
 			expect(result.result.backtrace).to be == error.backtrace
 		end
 	end
-
+	
 	with Async::Bus::Protocol::Return do
 		it "can serialize return values" do
 			return_response = Async::Bus::Protocol::Return.new(transaction_id, :return_value)

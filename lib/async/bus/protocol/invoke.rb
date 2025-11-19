@@ -46,8 +46,8 @@ module Async
 				def self.unpack(unpacker)
 					id = unpacker.read
 					name = unpacker.read
-					arguments = Array.new(unpacker.read) {unpacker.read}
-					options = Array.new(unpacker.read) {[unpacker.read, unpacker.read]}.to_h
+					arguments = Array.new(unpacker.read){unpacker.read}
+					options = Array.new(unpacker.read){[unpacker.read, unpacker.read]}.to_h
 					block_given = unpacker.read
 					
 					return self.new(id, name, arguments, options, block_given)

@@ -12,7 +12,7 @@ module Async
 				def initialize(connection, id, timeout: nil)
 					@connection = connection
 					@id = id
-
+					
 					@timeout = timeout
 					
 					@received = Thread::Queue.new
@@ -38,6 +38,14 @@ module Async
 					end
 				end
 				
+				# Push a message to the transaction's received queue.
+				# Silently ignores messages if the queue is already closed.
+				def push(message)
+					@received.push(message)
+				rescue ClosedQueueError
+					# Queue is closed (transaction already finished/closed) - ignore silently.
+				end
+				
 				def close
 					if connection = @connection
 						@connection = nil
@@ -49,7 +57,7 @@ module Async
 				
 				# Invoke a remote procedure.
 				def invoke(name, arguments, options, &block)
-					Console.debug(self) {[name, arguments, options, block]}
+					Console.debug(self){[name, arguments, options, block]}
 					
 					self.write(Invoke.new(@id, name, arguments, options, block_given?))
 					
@@ -68,9 +76,6 @@ module Async
 							raise(response.result)
 						end
 					end
-					
-				# ensure
-				# 	self.write(:close)
 				end
 				
 				# Accept a remote procedure invokation.
@@ -99,8 +104,6 @@ module Async
 					self.write(Throw.new(@id, error.tag))
 				rescue => error
 					self.write(Error.new(@id, error))
-				# ensure
-				# 	self.write(:close)
 				end
 			end
 		end
