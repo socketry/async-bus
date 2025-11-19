@@ -102,7 +102,7 @@ module Async
 				end
 				
 				private def finalize(name)
-					proc{@finalized << name}
+					proc {@finalized << name}
 				end
 				
 				def []=(name, object)

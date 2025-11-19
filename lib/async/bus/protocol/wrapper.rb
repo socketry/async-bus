@@ -25,27 +25,27 @@ module Async
 					# The order here matters.
 					
 					self.register_type(0x00, Invoke, recursive: true,
-						packer: ->(invoke, packer){invoke.pack(packer)},
-						unpacker: ->(unpacker){Invoke.unpack(unpacker)},
+						packer: ->(invoke, packer) {invoke.pack(packer)},
+						unpacker: ->(unpacker) {Invoke.unpack(unpacker)},
 					)
 					
 					[Return, Yield, Error, Next, Throw, Close].each_with_index do |klass, index|
 						self.register_type(0x01 + index, klass, recursive: true,
-							packer: ->(value, packer){value.pack(packer)},
-							unpacker: ->(unpacker){klass.unpack(unpacker)},
+							packer: ->(value, packer) {value.pack(packer)},
+							unpacker: ->(unpacker) {klass.unpack(unpacker)},
 						)
 					end
 					
 					# Reverse serialize proxies back into proxies:
 					# When a Proxy is received, create a proxy pointing back
 					self.register_type(0x10, Proxy,
-						packer: ->(proxy){proxy.__name__},
+						packer: ->(proxy) {proxy.__name__},
 						unpacker: @bus.method(:[]),
 					)
 					
 					self.register_type(0x11, Release, recursive: true,
-						packer: ->(release, packer){release.pack(packer)},
-						unpacker: ->(unpacker){Release.unpack(unpacker)},
+						packer: ->(release, packer) {release.pack(packer)},
+						unpacker: ->(unpacker) {Release.unpack(unpacker)},
 					)
 					
 					self.register_type(0x20, Symbol)
@@ -56,8 +56,8 @@ module Async
 					)
 					
 					self.register_type(0x22, Class,
-						packer: ->(klass){klass.name},
-						unpacker: ->(name){Object.const_get(name)},
+						packer: ->(klass) {klass.name},
+						unpacker: ->(name) {Object.const_get(name)},
 					)
 					
 					# Serialize objects into proxies:

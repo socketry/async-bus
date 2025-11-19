@@ -12,7 +12,7 @@ module Async
 				def initialize(connection, id, timeout: nil)
 					@connection = connection
 					@id = id
-
+					
 					@timeout = timeout
 					
 					@received = Thread::Queue.new
@@ -49,7 +49,7 @@ module Async
 				
 				# Invoke a remote procedure.
 				def invoke(name, arguments, options, &block)
-					Console.debug(self) {[name, arguments, options, block]}
+					Console.debug(self){[name, arguments, options, block]}
 					
 					self.write(Invoke.new(@id, name, arguments, options, block_given?))
 					
@@ -69,8 +69,8 @@ module Async
 						end
 					end
 					
-				# ensure
-				# 	self.write(:close)
+					# ensure
+					# 	self.write(:close)
 				end
 				
 				# Accept a remote procedure invokation.
@@ -99,8 +99,8 @@ module Async
 					self.write(Throw.new(@id, error.tag))
 				rescue => error
 					self.write(Error.new(@id, error))
-				# ensure
-				# 	self.write(:close)
+					# ensure
+					# 	self.write(:close)
 				end
 			end
 		end
