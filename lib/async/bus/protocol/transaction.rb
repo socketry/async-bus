@@ -9,11 +9,13 @@ module Async
 	module Bus
 		module Protocol
 			class Transaction
-				def initialize(connection, id)
+				def initialize(connection, id, timeout: nil)
 					@connection = connection
 					@id = id
+
+					@timeout = timeout
 					
-					@received = Async::Queue.new
+					@received = Thread::Queue.new
 					@accept = nil
 				end
 				
@@ -25,12 +27,10 @@ module Async
 						@connection.flush
 					end
 					
-					@received.dequeue
+					@received.pop(timeout: @timeout)
 				end
 				
 				def write(message)
-					# $stderr.puts "Transaction Writing: #{message.inspect}"
-					
 					if @connection
 						@connection.write(message)
 					else
@@ -41,7 +41,7 @@ module Async
 				def close
 					if connection = @connection
 						@connection = nil
-						@received.enqueue(nil)
+						@received.close
 						
 						connection.transactions.delete(@id)
 					end

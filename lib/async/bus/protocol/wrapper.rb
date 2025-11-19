@@ -4,133 +4,23 @@
 # Copyright, 2021-2025, by Samuel Williams.
 
 require "msgpack"
+
 require_relative "proxy"
+require_relative "invoke"
+require_relative "response"
+require_relative "release"
+
+require_relative "../controller"
 
 module Async
 	module Bus
 		module Protocol
-			class Invoke
-				def initialize(id, name, arguments, options, block_given)
-					@id = id
-					@name = name
-					@arguments = arguments
-					@options = options
-					@block_given = block_given
-				end
-				
-				attr :id
-				attr :name
-				attr :arguments
-				attr :options
-				attr :block_given
-				
-				def pack(packer)
-					packer.write(@id)
-					packer.write(@name)
-					
-					packer.write(@arguments.size)
-					@arguments.each do |argument|
-						packer.write(argument)
-					end
-					
-					packer.write(@options.size)
-					@options.each do |key, value|
-						packer.write(key)
-						packer.write(value)
-					end
-					
-					packer.write(@block_given)
-				end
-				
-				def self.unpack(unpacker)
-					id = unpacker.read
-					name = unpacker.read
-					arguments = Array.new(unpacker.read) {unpacker.read}
-					options = Array.new(unpacker.read) {[unpacker.read, unpacker.read]}.to_h
-					block_given = unpacker.read
-					
-					return self.new(id, name, arguments, options, block_given)
-				end
-			end
-			
-			class Response
-				def initialize(id, result)
-					@id = id
-					@result = result
-				end
-				
-				attr :id
-				attr :result
-				
-				def pack(packer)
-					packer.write(@id)
-					packer.write(@result)
-				end
-				
-				def self.unpack(unpacker)
-					id = unpacker.read
-					result = unpacker.read
-					
-					return self.new(id, result)
-				end
-			end
-			
-			class Return < Response
-				REFERENCE_TYPES = {Object => true, Hash => true, Array => true}
-				
-				def pack(packer, bus)
-					packer.write(@id)
-					if REFERENCE_TYPES[@result.class]
-						packer.write(true)
-						packer.write(bus.proxy(@result))
-					else
-						packer.write(false)
-						packer.write(@result)
-					end
-				end
-				
-				def self.unpack(unpacker, bus)
-					id = unpacker.read
-					reference = unpacker.read
-					result = unpacker.read
-					
-					if reference
-						result = bus[result]
-					end
-					
-					return self.new(id, result)
-				end
-			end
-			
-			Yield = Class.new(Response)
-			Error = Class.new(Response)
-			Next = Class.new(Response)
-			Throw = Class.new(Response)
-			Close = Class.new(Response)
-			
-			class Release
-				def initialize(name)
-					@name = name
-				end
-				
-				attr :name
-				
-				def pack(packer)
-					packer.write(@name)
-				end
-				
-				def self.unpack(unpacker)
-					name = unpacker.read
-					
-					return self.new(name)
-				end
-			end
-			
 			class Wrapper < MessagePack::Factory
-				def initialize(bus)
+				def initialize(bus, reference_types: [Controller])
 					super()
 					
 					@bus = bus
+					@reference_types = reference_types
 					
 					# The order here matters.
 					
@@ -139,22 +29,18 @@ module Async
 						unpacker: ->(unpacker){Invoke.unpack(unpacker)},
 					)
 					
-					self.register_type(0x01, Return, recursive: true,
-						packer: ->(response, packer){response.pack(packer, @bus)},
-						unpacker: ->(unpacker){Return.unpack(unpacker, @bus)},
-					)
-					
-					[Yield, Error, Next, Throw, Close].each_with_index do |klass, index|
-						self.register_type(0x02 + index, klass, recursive: true,
+					[Return, Yield, Error, Next, Throw, Close].each_with_index do |klass, index|
+						self.register_type(0x01 + index, klass, recursive: true,
 							packer: ->(value, packer){value.pack(packer)},
 							unpacker: ->(unpacker){klass.unpack(unpacker)},
 						)
 					end
 					
-					# Reverse serialize proxies back into objects:
+					# Reverse serialize proxies back into proxies:
+					# When a Proxy is received, create a proxy pointing back
 					self.register_type(0x10, Proxy,
 						packer: ->(proxy){proxy.__name__},
-						unpacker: @bus.method(:object),
+						unpacker: @bus.method(:[]),
 					)
 					
 					self.register_type(0x11, Release, recursive: true,
@@ -175,9 +61,9 @@ module Async
 					)
 					
 					# Serialize objects into proxies:
-					[Object, Hash, Array].each_with_index do |klass, index|
+					reference_types&.each_with_index do |klass, index|
 						self.register_type(0x30 + index, klass,
-							packer: @bus.method(:proxy),
+							packer: @bus.method(:proxy_name),
 							unpacker: @bus.method(:[]),
 						)
 					end

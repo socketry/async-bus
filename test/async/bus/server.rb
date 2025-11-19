@@ -109,21 +109,6 @@ describe Async::Bus::Server do
 			end
 		end
 		
-		it "can get a method instance and call it" do
-			array << 1 << 2 << 3
-			enumerated = []
-			
-			client.connect do |connection|
-				method = connection[:array].method(:each)
-				
-				method.call do |item|
-					enumerated << item
-				end
-			end
-			
-			expect(enumerated).to be == [1, 2, 3]
-		end
-		
 		it "has a __name__" do
 			client.connect do |connection|
 				expect(connection[:array].__name__).to be == :array
@@ -154,8 +139,9 @@ describe Async::Bus::Server do
 			array = MyArray.new
 			
 			client.connect do |connection|
-				# As an array is a primitve type, we must force it to be a proxy:
-				connection[:hash][:array] = array
+				# With explicit proxying, we must bind the object first to get a proxy:
+				array_proxy = connection.proxy(array)
+				connection[:hash][:array] = array_proxy
 				
 				expect(connection[:sum_key].call(:array)).to be == 0
 				

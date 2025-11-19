@@ -9,14 +9,15 @@ require "async/queue"
 module Async
 	module Bus
 		class Client
-			def initialize(endpoint = nil)
+			def initialize(endpoint = nil, **options)
 				@endpoint = endpoint || Protocol.local_endpoint
+				@options = options
 			end
 			
 			# @parameter persist [Boolean] Whether to keep the connection open indefiniely.
 			def connect(persist = false)
 				@endpoint.connect do |peer|
-					connection = Protocol::Connection.client(peer)
+					connection = Protocol::Connection.client(peer, **@options)
 					
 					connection_task = Async do
 						connection.run

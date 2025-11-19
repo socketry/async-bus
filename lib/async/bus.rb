@@ -4,3 +4,4 @@
 # Copyright, 2021-2025, by Samuel Williams.
 
 require_relative "bus/version"
+require_relative "bus/controller"
