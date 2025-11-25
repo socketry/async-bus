@@ -63,9 +63,10 @@ module Async
 			# Automatically reconnects when the connection fails, with random backoff.
 			# This is useful for long-running clients that need to maintain a persistent connection.
 			#
-			# @parameter parent [Async::Task] The parent task to run under.
-			def run
-				Sync do |task|
+			# @yields {|connection| ...} If a block is given, it will be called with the connection.
+			# @returns [Async::Task] The task that runs the client.
+			def run(&block)
+				Async(transient: true) do |task|
 					loop do
 						connection = connect!
 						

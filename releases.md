@@ -1,5 +1,9 @@
 # Releases
 
+## Unreleased
+
+  - `Client#run` now returns an `Async::Task` (as it did in earlier releases).
+
 ## v0.3.0
 
   - Add support for multi-hop proxying.
