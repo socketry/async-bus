@@ -35,7 +35,7 @@ Async do
 	
 	# Shared mutable state:
 	items = Array.new
-
+	
 	server.accept do |connection|
 		# Bind any object - it will be proxied to clients:
 		connection.bind(:items, items)

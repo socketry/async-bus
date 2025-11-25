@@ -5,6 +5,7 @@
 
 require "async/bus"
 require "async/bus/a_server"
+require "tmpdir"
 
 class TestArrayController < Async::Bus::Controller
 	def initialize(array)
@@ -148,6 +149,73 @@ describe Async::Bus::Controller do
 				end
 			end
 		end
+		
+		with "round-trip proxy behavior" do
+			class EchoController < Async::Bus::Controller
+				def initialize
+					@value = 0
+				end
+				
+				def increment
+					@value += 1
+					@value
+				end
+				
+				def get_value
+					@value
+				end
+				
+				def echo(controller)
+					# When a proxy is sent back to its origin, it should resolve to the actual object
+					# not a broken proxy pointing in the wrong direction.
+					# This allows round-trip scenarios to work correctly.
+					controller.get_value
+				end
+			end
+			
+			let(:echo_controller) {EchoController.new}
+			
+			def before
+				super
+				
+				@server_task = Async do
+					server_instance.accept do |connection|
+						connection.bind(:echo, echo_controller)
+					end
+				end
+			end
+			
+			def after(error = nil)
+				@server_task.stop
+				super
+			end
+			
+			it "can send a controller proxy and receive it back as the actual object" do
+				client_instance.connect do |connection|
+					echo = connection[:echo]
+					
+					# Get a proxy to the server's controller
+					server_controller_proxy = echo
+					
+					# Increment the value on the server
+					echo.increment
+					expect(echo.get_value).to be == 1
+					
+					# Send the proxy back to the server.
+					# The server should receive the actual object (not a broken proxy),
+					# because connection[] checks for locally bound objects first.
+					result = echo.echo(server_controller_proxy)
+					
+					# The server should be able to call methods on the received object
+					expect(result).to be == 1
+					
+					# Verify the server's controller still works
+					echo.increment
+					expect(echo.get_value).to be == 2
+				end
+			end
+		end
+		
 	end
 end
 

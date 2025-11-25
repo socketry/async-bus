@@ -19,6 +19,12 @@ module Async
 					@name = name
 				end
 				
+				# Get the connection to the remote object.
+				# @returns [Connection] The connection to the remote object.
+				def __connection__
+					@connection
+				end
+				
 				# Get the name of the remote object.
 				# @returns [Symbol] The name of the remote object.
 				def __name__

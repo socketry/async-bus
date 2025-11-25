@@ -26,52 +26,89 @@ module Async
 					@connection = connection
 					@reference_types = reference_types
 					
+					# Store the peer connection for forwarding proxies:
+					# When a proxy is forwarded (local=false), it should point back to the sender
+					# (the peer connection), not the receiver (this connection).
+					@peer_connection = nil
+					
 					# The order here matters.
 					
 					self.register_type(0x00, Invoke, recursive: true,
-						packer: ->(invoke, packer){invoke.pack(packer)},
-						unpacker: ->(unpacker){Invoke.unpack(unpacker)},
-					)
+							packer: ->(invoke, packer){invoke.pack(packer)},
+							unpacker: ->(unpacker){Invoke.unpack(unpacker)},
+						)
 					
 					[Return, Yield, Error, Next, Throw, Close].each_with_index do |klass, index|
 						self.register_type(0x01 + index, klass, recursive: true,
-							packer: ->(value, packer){value.pack(packer)},
-							unpacker: ->(unpacker){klass.unpack(unpacker)},
-						)
+								packer: ->(value, packer){value.pack(packer)},
+								unpacker: ->(unpacker){klass.unpack(unpacker)},
+							)
 					end
 					
 					# Reverse serialize proxies back into proxies:
-					# When a Proxy is received, create a proxy pointing back
+					# When a Proxy is received, use proxy_object to handle reverse lookup
 					self.register_type(0x10, Proxy, recursive: true,
-						# Since name can be a Symbol or String, we need to use recursive packing to ensure the name is properly serialized.
-						packer: ->(proxy, packer){packer.write(proxy.__name__)},
-						unpacker: ->(unpacker){connection[unpacker.read]},
-					)
+							packer: self.method(:pack_proxy),
+							unpacker: self.method(:unpack_proxy),
+						)
 					
 					self.register_type(0x11, Release, recursive: true,
-						packer: ->(release, packer){release.pack(packer)},
-						unpacker: ->(unpacker){Release.unpack(unpacker)},
-					)
+							packer: ->(release, packer){release.pack(packer)},
+							unpacker: ->(unpacker){Release.unpack(unpacker)},
+						)
 					
 					self.register_type(0x20, Symbol)
-					self.register_type(0x21, Exception,
-						packer: self.method(:pack_exception),
-						unpacker: self.method(:unpack_exception),
-						recursive: true,
-					)
+					self.register_type(0x21, Exception, recursive: true,
+							packer: self.method(:pack_exception),
+							unpacker: self.method(:unpack_exception),
+						)
 					
 					self.register_type(0x22, Class,
-						packer: ->(klass){klass.name},
-						unpacker: ->(name){Object.const_get(name)},
-					)
+							packer: ->(klass){klass.name},
+							unpacker: ->(name){Object.const_get(name)},
+						)
+					
+					reference_packer = self.method(:pack_reference)
+					reference_unpacker = self.method(:unpack_reference)
 					
 					# Serialize objects into proxies:
 					reference_types&.each_with_index do |klass, index|
-						self.register_type(0x30 + index, klass,
-							packer: connection.method(:proxy_name),
-							unpacker: connection.method(:[]),
-						)
+						self.register_type(0x30 + index, klass, recursive: true,
+								packer: reference_packer,
+								unpacker: reference_unpacker,
+							)
 					end
+				end
+				
+				# Pack a proxy into a MessagePack packer.
+				#
+				# Validates that the proxy is for this connection and serializes the proxy name.
+				# Multi-hop proxy forwarding is not supported, so proxies can only be serialized
+				# from the same connection they were created for (round-trip scenarios).
+				#
+				# @parameter proxy [Proxy] The proxy to serialize.
+				# @parameter packer [MessagePack::Packer] The packer to write to.
+				# @raises [ArgumentError] If the proxy is from a different connection (multi-hop forwarding not supported).
+				def pack_proxy(proxy, packer)
+					# Check if the proxy is for this connection:
+					if proxy.__connection__ != @connection
+						proxy = @connection.proxy(proxy)
+					end
+					
+					packer.write(proxy.__name__)
+				end
+				
+				# Unpack a proxy from a MessagePack unpacker.
+				#
+				# When deserializing a proxy:
+				# - If the object is bound locally, return the actual object (round-trip scenario)
+				# - If the object is not found locally, create a proxy pointing to this connection
+				#   (the proxy was forwarded from another connection and should point back to the sender)
+				#
+				# @parameter unpacker [MessagePack::Unpacker] The unpacker to read from.
+				# @returns [Object | Proxy] The actual object if bound locally, or a proxy pointing to this connection.
+				def unpack_proxy(unpacker)
+					@connection.proxy_object(unpacker.read)
 				end
 				
 				# Pack an exception into a MessagePack packer.
@@ -97,6 +134,14 @@ module Async
 					exception.set_backtrace(backtrace)
 					
 					return exception
+				end
+				
+				def pack_reference(object, packer)
+					packer.write(@connection.proxy_name(object))
+				end
+				
+				def unpack_reference(unpacker)
+					@connection.proxy_object(unpacker.read)
 				end
 			end
 		end

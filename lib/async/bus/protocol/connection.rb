@@ -143,19 +143,14 @@ module Async
 				
 				# Generate a proxy for a remotely bound object.
 				#
-				# **This will not return objects bound locally, only proxies for remotely bound objects.**
+				# **This always returns a proxy, even if the object is bound locally.**
+				# The object bus is not shared between client and server, so `[]` always
+				# returns a proxy to the remote instance.
 				#
 				# @parameter name [String] The name of the bound object.
-				# @returns [Object | Proxy] The object or proxy instance for the bound object.
+				# @returns [Proxy] A proxy instance for the bound object.
 				def [](name)
-					unless proxy = @proxies[name]
-						proxy = Proxy.new(self, name)
-						@proxies[name] = proxy
-						
-						::ObjectSpace.define_finalizer(proxy, finalize(name))
-					end
-					
-					return proxy
+					return proxy_for(name)
 				end
 				
 				# Explicitly bind an object to a name, such that it could be accessed remotely.
@@ -175,8 +170,8 @@ module Async
 					# Bind the object into the local object store (explicitly bound, not temporary):
 					@objects[name] = Explicit.new(object)
 					
-					# Return the proxy instance for the bound object:
-					return self[name]
+					# Always return a proxy for passing by reference, even for locally bound objects:
+					return proxy_for(name)
 				end
 				
 				# Implicitly bind an object with a temporary name, such that it could be accessed remotely.
@@ -188,13 +183,13 @@ module Async
 				# @parameter object [Object] The object to bind to a temporary name.
 				# @returns [Proxy] A proxy instance for the bound object.
 				def proxy(object)
-					name = "<#{object.class}@#{next_id.to_s(16)}>".freeze
+					name = object.__id__
 					
 					# Bind the object into the local object store (temporary):
-					@objects[name] = Implicit.new(object)
+					@objects[name] ||= Implicit.new(object)
 					
-					# This constructs the Proxy instance:
-					return self[name]
+					# Always return a proxy for passing by reference:
+					return proxy_for(name)
 				end
 				
 				# Implicitly bind an object with a temporary name, such that it could be accessed remotely.
@@ -206,13 +201,48 @@ module Async
 				# @parameter object [Object] The object to bind to a temporary name.
 				# @returns [String] The name of the bound object.
 				def proxy_name(object)
-					name = "<#{object.class}@#{next_id.to_s(16)}>".freeze
+					name = object.__id__
 					
 					# Bind the object into the local object store (temporary):
-					@objects[name] = Implicit.new(object)
+					@objects[name] ||= Implicit.new(object)
 					
 					# Return the name:
 					return name
+				end
+				
+				# Get an object or proxy for a bound object, handling reverse lookup.
+				#
+				# If the object is bound locally and the proxy is for this connection, returns the actual object.
+				# If the object is bound remotely, or the proxy is from a different connection, returns a proxy.
+				# This is used when deserializing proxies to handle round-trip scenarios and avoid name collisions.
+				#
+				# @parameter name [String] The name of the bound object.
+				# @parameter local [Boolean] Whether the proxy is for this connection (from serialization). Defaults to true.
+				# @returns [Object | Proxy] The object if bound locally and proxy is for this connection, or a proxy otherwise.
+				def proxy_object(name)
+					# If the proxy is for this connection and the object is bound locally, return the actual object:
+					if entry = @objects[name]
+						# This handles round-trip scenarios correctly.
+						return entry.object
+					end
+					
+					# Otherwise, create a proxy for the remote object:
+					return proxy_for(name)
+				end
+				
+				# Get or create a proxy for a named object.
+				#
+				# @parameter name [String] The name of the object.
+				# @returns [Proxy] A proxy instance for the named object.
+				private def proxy_for(name)
+					unless proxy = @proxies[name]
+						proxy = Proxy.new(self, name)
+						@proxies[name] = proxy
+						
+						::ObjectSpace.define_finalizer(proxy, finalize(name))
+					end
+					
+					return proxy
 				end
 				
 				private def finalize(name)

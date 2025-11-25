@@ -12,11 +12,33 @@ class FakeBus
 		@proxies = {}
 	end
 	
+	attr :objects
+	
 	def proxy_name(object)
-		name = "<#{object.class}@#{object.object_id}>"
+		name = object.__id__
 		@objects[name] = object
 		
 		return name
+	end
+	
+	def proxy_object(name, local = true)
+		# If the proxy is for this connection and the object is bound locally, return the actual object:
+		if local && (entry = @objects[name])
+			# Handle wrapper structs (like Connection uses Explicit/Implicit):
+			if entry.respond_to?(:object)
+				return entry.object
+			else
+				return entry
+			end
+		end
+		
+		# Otherwise, create a proxy for the remote object:
+		unless proxy = @proxies[name]
+			proxy = Async::Bus::Protocol::Proxy.new(self, name)
+			@proxies[name] = proxy
+		end
+		
+		return proxy
 	end
 	
 	def [](name)
@@ -143,6 +165,13 @@ describe Async::Bus::Protocol::Wrapper do
 	
 	with Async::Bus::Protocol::Proxy do
 		it "can serialize a proxy with a symbol name" do
+			# Bind an object locally so it can be found during deserialization (round-trip scenario)
+			worker_object = Object.new
+			# FakeBus stores objects directly, but Connection uses Explicit/Implicit wrappers
+			# For FakeBus, we'll create a simple wrapper that responds to .object
+			wrapper = Struct.new(:object).new(worker_object)
+			bus.objects[:worker] = wrapper
+			
 			proxy = Async::Bus::Protocol::Proxy.new(bus, :worker)
 			
 			packer.write(proxy)
@@ -150,11 +179,18 @@ describe Async::Bus::Protocol::Wrapper do
 			
 			result = unpacker.read
 			
-			# Verify the proxy name is correctly serialized/deserialized:
-			expect(result.__name__).to be == :worker
+			# Should return the actual object (round-trip scenario)
+			expect(result).to be_equal(worker_object)
 		end
 		
 		it "can serialize a proxy with a string name" do
+			# Bind an object locally so it can be found during deserialization (round-trip scenario)
+			worker_object = Object.new
+			# FakeBus stores objects directly, but Connection uses Explicit/Implicit wrappers
+			# For FakeBus, we'll create a simple wrapper that responds to .object
+			wrapper = Struct.new(:object).new(worker_object)
+			bus.objects["worker-123"] = wrapper
+			
 			proxy = Async::Bus::Protocol::Proxy.new(bus, "worker-123")
 			
 			packer.write(proxy)
@@ -162,8 +198,24 @@ describe Async::Bus::Protocol::Wrapper do
 			
 			result = unpacker.read
 			
-			# Verify the proxy name is correctly serialized/deserialized:
-			expect(result.__name__).to be == "worker-123"
+			# Should return the actual object (round-trip scenario)
+			expect(result).to be_equal(worker_object)
+		end
+		
+		it "creates a proxy when object not found locally" do
+			# Create a proxy for a name that doesn't exist in objects
+			# This tests the forwarding path in unpack_proxy when @connection.objects[name] returns nil
+			# When a proxy is forwarded from another connection, we create a proxy pointing to this connection
+			proxy = Async::Bus::Protocol::Proxy.new(bus, :nonexistent)
+			
+			packer.write(proxy)
+			packer.flush
+			
+			result = unpacker.read
+			
+			# Should return a proxy pointing to this connection (forwarding scenario)
+			expect(result.__name__).to be == :nonexistent
+			expect(result.__connection__).to be == bus
 		end
 	end
 end

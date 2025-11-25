@@ -112,10 +112,10 @@ When a controller method returns another controller, the client receives a proxy
 
 ```ruby
 # Server:
-server = ChatServerController.new
+chat = ChatServerController.new
 
 server.accept do |connection|
-	connection.bind(:chat, server)
+	connection.bind(:chat, chat)
 end
 
 # Client 1:
@@ -135,7 +135,7 @@ end
 
 ## Passing Controllers as Arguments
 
-Because controllers are passed by reference, you can pass them as arguments to enable bidirectional communication. This pattern is useful for event handlers, callbacks, or subscription systems:
+Because controllers are passed by reference, you can pass them as arguments to enable bidirectional communication. When a client passes a proxy as an argument, the server receives a proxy that points back to the client's controller. This enables the server to call methods on the client's controller. This pattern is useful for event handlers, callbacks, or subscription systems:
 
 ```ruby
 class ChatRoomController < Async::Bus::Controller
@@ -149,7 +149,7 @@ class ChatRoomController < Async::Bus::Controller
 		# subscriber is a proxy to the client's controller:
 		@subscribers << subscriber
 		# Send existing messages to the new subscriber:
-		@messages.each { |msg| subscriber.on_message(msg) }
+		@messages.each{|msg| subscriber.on_message(msg)}
 		true
 	end
 	

@@ -44,7 +44,7 @@ describe Async::Bus::Client do
 				end
 			end
 			
-			client_task = client_instance.run
+			client_task = Async {client_instance.run}
 			
 			# Wait for initial connection
 			reactor.sleep(0.01)
@@ -87,7 +87,7 @@ describe Async::Bus::Client do
 				end
 			end
 			
-			client_task = client_instance.run
+			client_task = Async {client_instance.run}
 			
 			# Wait for initial connection
 			reactor.sleep(0.02)
@@ -130,7 +130,7 @@ describe Async::Bus::Client do
 				end
 			end
 			
-			client_task = client_instance.run
+			client_task = Async {client_instance.run}
 			
 			# Wait for initial connection
 			reactor.sleep(0.01)
@@ -172,7 +172,7 @@ describe Async::Bus::Client do
 				end
 			end
 			
-			client_task = client_instance.run
+			client_task = Async {client_instance.run}
 			
 			# Wait for reconnection after initial failure
 			# The first attempt fails, sleeps (rand, so 0-1 seconds), then retries

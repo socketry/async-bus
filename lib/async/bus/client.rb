@@ -64,13 +64,15 @@ module Async
 			# This is useful for long-running clients that need to maintain a persistent connection.
 			#
 			# @parameter parent [Async::Task] The parent task to run under.
-			def run(parent: Task.current)
-				parent.async(annotation: "Bus Client", transient: true) do |task|
+			def run
+				Sync do |task|
 					loop do
 						connection = connect!
 						
 						connected_task = task.async do
 							connected!(connection)
+							
+							yield(connection) if block_given?
 						end
 						
 						connection.run
