@@ -113,7 +113,7 @@ describe Async::Bus::Protocol::Transaction do
 				def service.yielding_method
 					yield 1
 				end
-					
+				
 				connection.bind(:service, service)
 			end
 			
@@ -136,7 +136,7 @@ describe Async::Bus::Protocol::Transaction do
 				def service.error_method
 					raise ArgumentError, "Invalid argument"
 				end
-					
+				
 				connection.bind(:service, service)
 			end
 			

@@ -13,7 +13,7 @@ require "tmpdir"
 module Async
 	module Bus
 		AServer = Sus::Shared("a server") do
-			include Sus::Fixtures::Async::ReactorContext
+			include Sus::Fixtures::Async::SchedulerContext
 			
 			let(:ipc_path) {File.join(@root, "bus.ipc")}
 			let(:endpoint) {Async::Bus::Protocol.local_endpoint(ipc_path)}
@@ -25,11 +25,11 @@ module Async
 				end
 			end
 			
-			def before
+			before do
 				@bound_endpoint = endpoint.bound
 			end
 			
-			def after(error = nil)
+			after do
 				@bound_endpoint&.close
 				@server_task&.stop
 			end

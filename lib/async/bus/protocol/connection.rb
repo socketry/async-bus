@@ -84,11 +84,26 @@ module Async
 				
 				attr :transactions
 				
+				Explicit = Struct.new(:object) do
+					def temporary?
+						false
+					end
+				end
+				
+				Implicit = Struct.new(:object) do
+					def temporary?
+						true
+					end
+				end
+				
 				# Bind a local object to a name, such that it could be accessed remotely.
 				#
 				# @returns [Proxy] A proxy instance for the bound object.
 				def bind(name, object)
-					@objects[name] = object
+					# Bind the object into the local object store (explicitly bound, not temporary):
+					@objects[name] = Explicit.new(object)
+					
+					# Return the proxy instance for the bound object:
 					return self[name]
 				end
 				
@@ -98,7 +113,11 @@ module Async
 				def proxy(object)
 					name = "<#{object.class}@#{next_id.to_s(16)}>".freeze
 					
-					return bind(name, object)
+					# Bind the object into the local object store (temporary):
+					@objects[name] = Implicit.new(object)
+					
+					# This constructs the Proxy instance:
+					return self[name]
 				end
 				
 				# Generate a proxy name for an object and bind it, returning just the name.
@@ -107,12 +126,16 @@ module Async
 				# @returns [String] The name of the bound object.
 				def proxy_name(object)
 					name = "<#{object.class}@#{next_id.to_s(16)}>".freeze
-					bind(name, object)
+					
+					# Bind the object into the local object store (temporary):
+					@objects[name] = Implicit.new(object)
+					
+					# Return the name:
 					return name
 				end
 				
 				def object(name)
-					@objects[name]
+					@objects[name]&.object
 				end
 				
 				private def finalize(name)
@@ -122,7 +145,7 @@ module Async
 				end
 				
 				def []=(name, object)
-					@objects[name] = object
+					@objects[name] = Explicit.new(object)
 				end
 				
 				def [](name)
@@ -164,11 +187,9 @@ module Async
 					
 					@unpacker.each do |message|
 						case message
-						when Release
-							@objects.delete(message.name)
 						when Invoke
 							# If the object is not found, send an error response and skip the transaction:
-							if object = @objects[message.name]
+							if object = @objects[message.name]&.object
 								transaction = self.transaction!(message.id)
 								
 								parent.async(annotation: "Invoke #{message.name}") do
@@ -187,6 +208,12 @@ module Async
 								transaction.push(message)
 							else
 								# Stale message - transaction already closed (e.g. timeout) or never existed (ignore silently).
+							end
+						when Release
+							name = message.name
+							if @objects[name]&.temporary?
+								# Only delete temporary objects, not explicitly bound ones:
+								@objects.delete(name)
 							end
 						else
 							Console.error(self, "Unexpected message:", message)
