@@ -208,7 +208,7 @@ describe Async::Bus::Protocol::Connection do
 					# Break as soon as the object is no longer in the server's objects:
 					break unless server_connection.objects.key?(name)
 				end
-
+				
 				expect(server_connection.objects).not.to have_keys(name)
 			end
 		end

@@ -90,26 +90,26 @@ module Async
 					
 					self.write(Invoke.new(@id, name, arguments, options, block_given?))
 					
-				while response = self.read
-					case response
-					when Return
-						return response.result
-					when Yield
-						begin
-							result = yield(*response.result)
-							self.write(Next.new(@id, result))
-						rescue => error
-							self.write(Error.new(@id, error))
+					while response = self.read
+						case response
+						when Return
+							return response.result
+						when Yield
+							begin
+								result = yield(*response.result)
+								self.write(Next.new(@id, result))
+							rescue => error
+								self.write(Error.new(@id, error))
+							end
+						when Error
+							raise(response.result)
+						when Throw
+							# Re-throw the tag and value that was thrown on the server side
+							# Throw.result contains [tag, value] array
+							tag, value = response.result
+							throw(tag, value)
 						end
-					when Error
-						raise(response.result)
-					when Throw
-						# Re-throw the tag and value that was thrown on the server side
-						# Throw.result contains [tag, value] array
-						tag, value = response.result
-						throw(tag, value)
 					end
-				end
 				end
 				
 				# Accept a remote procedure invocation.

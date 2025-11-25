@@ -68,14 +68,6 @@ module Async
 					@connection.invoke(@name, [:respond_to?, name, include_all])
 				end
 				
-				# Check if the remote object responds to a missing method.
-				# @parameter name [Symbol] The method name to check.
-				# @parameter include_all [Boolean] Whether to include private methods.
-				# @returns [Boolean] True if the method exists.
-				def respond_to_missing?(name, include_all = false)
-					@connection.invoke(@name, [:respond_to?, name, include_all])
-				end
-				
 				# Return a string representation of the proxy.
 				# @returns [String] A string describing the proxy.
 				def inspect

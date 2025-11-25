@@ -27,31 +27,5 @@ describe Async::Bus::Protocol::Proxy do
 			end
 		end
 	end
-	
-	with "#respond_to_missing?" do
-		it "can check if remote object responds to method" do
-			start_server do |connection|
-				service = Object.new
-				def service.test_method
-					:result
-				end
-				
-				connection.bind(:service, service)
-			end
-			
-			client.connect do |connection|
-				proxy = connection[:service]
-				
-				# Call respond_to_missing? using instance_eval since Proxy inherits from BasicObject
-				# which doesn't have send/__send__/method
-				# (respond_to? is defined on Proxy, so Ruby won't call respond_to_missing? automatically)
-				result1 = proxy.instance_eval { respond_to_missing?(:test_method, false) }
-				result2 = proxy.instance_eval { respond_to_missing?(:nonexistent_method, false) }
-				
-				expect(result1).to be == true
-				expect(result2).to be == false
-			end
-		end
-	end
 end
 
