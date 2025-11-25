@@ -136,10 +136,24 @@ module Async
 					return exception
 				end
 				
+				# Pack a reference type object (e.g., Controller) into a MessagePack packer.
+				#
+				# Serializes the object as a proxy by generating a temporary name and writing it to the packer.
+				# The object is implicitly bound to the connection with a temporary name.
+				#
+				# @parameter object [Object] The reference type object to serialize.
+				# @parameter packer [MessagePack::Packer] The packer to write to.
 				def pack_reference(object, packer)
 					packer.write(@connection.proxy_name(object))
 				end
 				
+				# Unpack a reference type object from a MessagePack unpacker.
+				#
+				# Reads a proxy name and returns the corresponding object or proxy.
+				# If the object is bound locally, returns the actual object; otherwise returns a proxy.
+				#
+				# @parameter unpacker [MessagePack::Unpacker] The unpacker to read from.
+				# @returns [Object | Proxy] The actual object if bound locally, or a proxy otherwise.
 				def unpack_reference(unpacker)
 					@connection.proxy_object(unpacker.read)
 				end
