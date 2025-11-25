@@ -18,7 +18,9 @@ Please see the [project documentation](https://socketry.github.io/async-bus/) fo
 
 Please see the [project releases](https://socketry.github.io/async-bus/releases/index) for all releases.
 
-### Unreleased
+### v0.2.0
+
+  - Fix handling of temporary objects.
 
 ## Contributing
 
