@@ -8,7 +8,12 @@ require "async/queue"
 module Async
 	module Bus
 		module Protocol
+			# Represents a transaction for a remote procedure call.
 			class Transaction
+				# Initialize a new transaction.
+				# @parameter connection [Connection] The connection for this transaction.
+				# @parameter id [Integer] The transaction ID.
+				# @parameter timeout [Float] The timeout for the transaction.
 				def initialize(connection, id, timeout: nil)
 					@connection = connection
 					@id = id
@@ -19,14 +24,23 @@ module Async
 					@accept = nil
 				end
 				
+				# @attribute [Connection] The connection for this transaction.
 				attr :connection
+				
+				# @attribute [Integer] The transaction ID.
 				attr :id
 				
+				# @attribute [Float] The timeout for the transaction.
 				attr_accessor :timeout
 				
+				# @attribute [Thread::Queue] The queue of received messages.
 				attr :received
+				
+				# @attribute [Object] The accept handler.
 				attr :accept
 				
+				# Read a message from the transaction queue.
+				# @returns [Object] The next message.
 				def read
 					if @received.empty?
 						@connection.flush
@@ -35,6 +49,9 @@ module Async
 					@received.pop(timeout: @timeout)
 				end
 				
+				# Write a message to the connection.
+				# @parameter message [Object] The message to write.
+				# @raises [RuntimeError] If the transaction is closed.
 				def write(message)
 					if @connection
 						@connection.write(message)
@@ -45,12 +62,14 @@ module Async
 				
 				# Push a message to the transaction's received queue.
 				# Silently ignores messages if the queue is already closed.
+				# @parameter message [Object] The message to push.
 				def push(message)
 					@received.push(message)
 				rescue ClosedQueueError
 					# Queue is closed (transaction already finished/closed) - ignore silently.
 				end
 				
+				# Close the transaction and clean up resources.
 				def close
 					if connection = @connection
 						@connection = nil
@@ -61,6 +80,11 @@ module Async
 				end
 				
 				# Invoke a remote procedure.
+				# @parameter name [Symbol] The name of the remote object.
+				# @parameter arguments [Array] The positional arguments.
+				# @parameter options [Hash] The keyword arguments.
+				# @yields {|*args| ...} Optional block for yielding operations.
+				# @returns [Object] The result of the invocation.
 				def invoke(name, arguments, options, &block)
 					Console.debug(self){[name, arguments, options, block]}
 					
@@ -83,7 +107,11 @@ module Async
 					end
 				end
 				
-				# Accept a remote procedure invokation.
+				# Accept a remote procedure invocation.
+				# @parameter object [Object] The object to invoke the method on.
+				# @parameter arguments [Array] The positional arguments.
+				# @parameter options [Hash] The keyword arguments.
+				# @parameter block_given [Boolean] Whether a block was provided.
 				def accept(object, arguments, options, block_given)
 					if block_given
 						result = object.public_send(*arguments, **options) do |*yield_arguments|

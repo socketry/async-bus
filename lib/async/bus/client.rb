@@ -8,7 +8,11 @@ require "async/queue"
 
 module Async
 	module Bus
+		# Represents a client that can connect to a server.
 		class Client
+			# Initialize a new client.
+			# @parameter endpoint [IO::Endpoint] The endpoint to connect to.
+			# @parameter options [Hash] Additional options for the connection.
 			def initialize(endpoint = nil, **options)
 				@endpoint = endpoint || Protocol.local_endpoint
 				@options = options

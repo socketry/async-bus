@@ -13,20 +13,38 @@ require_relative "response"
 
 module Async
 	module Bus
+		# @namespace
 		module Protocol
+			# Create a local Unix domain socket endpoint.
+			# @parameter path [String] The path to the socket file.
+			# @returns [IO::Endpoint::Unix] The Unix endpoint.
 			def self.local_endpoint(path = "bus.ipc")
 				::IO::Endpoint.unix(path)
 			end
 			
+			# Represents a connection between client and server for message passing.
 			class Connection
+				# Create a client-side connection.
+				# @parameter peer [IO] The peer connection.
+				# @parameter options [Hash] Additional options for the connection.
+				# @returns [Connection] A new client connection.
 				def self.client(peer, **options)
 					self.new(peer, 1, **options)
 				end
 				
+				# Create a server-side connection.
+				# @parameter peer [IO] The peer connection.
+				# @parameter options [Hash] Additional options for the connection.
+				# @returns [Connection] A new server connection.
 				def self.server(peer, **options)
 					self.new(peer, 2, **options)
 				end
 				
+				# Initialize a new connection.
+				# @parameter peer [IO] The peer connection.
+				# @parameter id [Integer] The initial transaction ID.
+				# @parameter wrapper [Class] The wrapper class for serialization.
+				# @parameter timeout [Float] The timeout for transactions.
 				def initialize(peer, id, wrapper: Wrapper, timeout: nil)
 					@peer = peer
 					@id = id
@@ -47,16 +65,20 @@ module Async
 				# @attribute [Float] The timeout for transactions.
 				attr_accessor :timeout
 				
+				# Flush the packer buffer.
 				def flush
 					@packer.flush
 				end
 				
+				# Write a message to the connection.
+				# @parameter message [Object] The message to write.
 				def write(message)
 					# $stderr.puts "Writing: #{message.inspect}"
 					@packer.write(message)
 					@packer.flush
 				end
 				
+				# Close the connection and clean up resources.
 				def close
 					@transactions.each do |id, transaction|
 						transaction.close
@@ -65,16 +87,26 @@ module Async
 					@peer.close
 				end
 				
+				# Return a string representation of the connection.
+				# @returns [String] A string describing the connection.
 				def inspect
 					"#<#{self.class} #{@objects.size} objects>"
 				end
 				
+				# @attribute [Hash] The bound objects.
 				attr :objects
+				
+				# @attribute [ObjectSpace::WeakMap] The proxy cache.
 				attr :proxies
 				
+				# @attribute [MessagePack::Unpacker] The message unpacker.
 				attr :unpacker
+				
+				# @attribute [MessagePack::Packer] The message packer.
 				attr :packer
 				
+				# Get the next transaction ID.
+				# @returns [Integer] The next transaction ID.
 				def next_id
 					id = @id
 					@id += 2
@@ -82,6 +114,7 @@ module Async
 					return id
 				end
 				
+				# @attribute [Hash] Active transactions.
 				attr :transactions
 				
 				Explicit = Struct.new(:object) do
@@ -96,58 +129,24 @@ module Async
 					end
 				end
 				
-				# Bind a local object to a name, such that it could be accessed remotely.
+				# Explicitly bind an object to a name, such that it could be accessed remotely.
 				#
-				# @returns [Proxy] A proxy instance for the bound object.
-				def bind(name, object)
-					# Bind the object into the local object store (explicitly bound, not temporary):
-					@objects[name] = Explicit.new(object)
-					
-					# Return the proxy instance for the bound object:
-					return self[name]
-				end
-				
-				# Generate a proxy name for an object and bind it.
+				# This is the same as {bind} but due to the semantics of the `[]=` operator, it does not return a proxy instance.
 				#
-				# @returns [Proxy] A proxy instance for the bound object.
-				def proxy(object)
-					name = "<#{object.class}@#{next_id.to_s(16)}>".freeze
-					
-					# Bind the object into the local object store (temporary):
-					@objects[name] = Implicit.new(object)
-					
-					# This constructs the Proxy instance:
-					return self[name]
-				end
-				
-				# Generate a proxy name for an object and bind it, returning just the name.
-				# Used for serialization when you need the name string, not a Proxy instance.
+				# Explicitly bound objects are not garbage collected until the connection is closed.
 				#
-				# @returns [String] The name of the bound object.
-				def proxy_name(object)
-					name = "<#{object.class}@#{next_id.to_s(16)}>".freeze
-					
-					# Bind the object into the local object store (temporary):
-					@objects[name] = Implicit.new(object)
-					
-					# Return the name:
-					return name
-				end
-				
-				def object(name)
-					@objects[name]&.object
-				end
-				
-				private def finalize(name)
-					proc do
-						@finalized.push(name) rescue nil
-					end
-				end
-				
+				# @parameter name [String] The name to bind the object to.
+				# @parameter object [Object] The object to bind to the given name.
 				def []=(name, object)
 					@objects[name] = Explicit.new(object)
 				end
 				
+				# Generate a proxy for a remotely bound object.
+				#
+				# **This will not return objects bound locally, only proxies for remotely bound objects.**
+				#
+				# @parameter name [String] The name of the bound object.
+				# @returns [Object | Proxy] The object or proxy instance for the bound object.
 				def [](name)
 					unless proxy = @proxies[name]
 						proxy = Proxy.new(self, name)
@@ -159,6 +158,72 @@ module Async
 					return proxy
 				end
 				
+				# Explicitly bind an object to a name, such that it could be accessed remotely.
+				#
+				# This method is identical to {[]=} but also returns a {Proxy} instance for the bound object which can be passed by reference.
+				#
+				# Explicitly bound objects are not garbage collected until the connection is closed.
+				#
+				# @example Binding an object to a name and accessing it remotely.
+				# 	array_proxy = connection.bind(:items, [1, 2, 3])
+				# 	connection[:remote].register(array_proxy)
+				#
+				# @parameter name [String] The name to bind the object to.
+				# @parameter object [Object] The object to bind to the given name.
+				# @returns [Proxy] A proxy instance for the bound object.
+				def bind(name, object)
+					# Bind the object into the local object store (explicitly bound, not temporary):
+					@objects[name] = Explicit.new(object)
+					
+					# Return the proxy instance for the bound object:
+					return self[name]
+				end
+				
+				# Implicitly bind an object with a temporary name, such that it could be accessed remotely.
+				#
+				# Implicitly bound objects are garbage collected when the remote end no longer references them.
+				#
+				# This method is simliar to {bind} but is designed to be used to generate temporary proxies for objects that are not explicitly bound.
+				#
+				# @parameter object [Object] The object to bind to a temporary name.
+				# @returns [Proxy] A proxy instance for the bound object.
+				def proxy(object)
+					name = "<#{object.class}@#{next_id.to_s(16)}>".freeze
+					
+					# Bind the object into the local object store (temporary):
+					@objects[name] = Implicit.new(object)
+					
+					# This constructs the Proxy instance:
+					return self[name]
+				end
+				
+				# Implicitly bind an object with a temporary name, such that it could be accessed remotely.
+				#
+				# Implicitly bound objects are garbage collected when the remote end no longer references them.
+				#
+				# This method is similar to {proxy} but is designed to be used to generate temporary names for objects that are not explicitly bound during serialization.
+				#
+				# @parameter object [Object] The object to bind to a temporary name.
+				# @returns [String] The name of the bound object.
+				def proxy_name(object)
+					name = "<#{object.class}@#{next_id.to_s(16)}>".freeze
+					
+					# Bind the object into the local object store (temporary):
+					@objects[name] = Implicit.new(object)
+					
+					# Return the name:
+					return name
+				end
+				
+				private def finalize(name)
+					proc do
+						@finalized.push(name) rescue nil
+					end
+				end
+				
+				# Create a new transaction.
+				# @parameter id [Integer] The transaction ID.
+				# @returns [Transaction] A new transaction.
 				def transaction!(id = self.next_id)
 					transaction = Transaction.new(self, id, timeout: @timeout)
 					@transactions[id] = transaction
@@ -166,6 +231,12 @@ module Async
 					return transaction
 				end
 				
+				# Invoke a remote procedure.
+				# @parameter name [Symbol] The name of the remote object.
+				# @parameter arguments [Array] The arguments to pass.
+				# @parameter options [Hash] The keyword arguments to pass.
+				# @yields {|*args| ...} Optional block for yielding operations.
+				# @returns [Object] The result of the invocation.
 				def invoke(name, arguments, options = {}, &block)
 					transaction = self.transaction!
 					
@@ -174,10 +245,14 @@ module Async
 					transaction&.close
 				end
 				
+				# Send a release message for a named object.
+				# @parameter name [Symbol] The name of the object to release.
 				def send_release(name)
 					self.write(Release.new(name))
 				end
 				
+				# Run the connection message loop.
+				# @parameter parent [Async::Task] The parent task to run under.
 				def run(parent: Task.current)
 					finalizer_task = parent.async do
 						while name = @finalized.pop

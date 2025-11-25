@@ -9,6 +9,7 @@ require "async/bus/protocol/response"
 class FakeBus
 	def initialize
 		@objects = {}
+		@proxies = {}
 	end
 	
 	def proxy_name(object)
@@ -19,7 +20,12 @@ class FakeBus
 	end
 	
 	def [](name)
-		@objects[name]
+		unless proxy = @proxies[name]
+			proxy = Async::Bus::Protocol::Proxy.new(self, name)
+			@proxies[name] = proxy
+		end
+		
+		return proxy
 	end
 end
 
@@ -132,6 +138,32 @@ describe Async::Bus::Protocol::Wrapper do
 			expect(result).to be_a(Async::Bus::Protocol::Close)
 			expect(result.id).to be == transaction_id
 			expect(result.result).to be_nil
+		end
+	end
+	
+	with Async::Bus::Protocol::Proxy do
+		it "can serialize a proxy with a symbol name" do
+			proxy = Async::Bus::Protocol::Proxy.new(bus, :worker)
+			
+			packer.write(proxy)
+			packer.flush
+			
+			result = unpacker.read
+			
+			# Verify the proxy name is correctly serialized/deserialized:
+			expect(result.__name__).to be == :worker
+		end
+		
+		it "can serialize a proxy with a string name" do
+			proxy = Async::Bus::Protocol::Proxy.new(bus, "worker-123")
+			
+			packer.write(proxy)
+			packer.flush
+			
+			result = unpacker.read
+			
+			# Verify the proxy name is correctly serialized/deserialized:
+			expect(result.__name__).to be == "worker-123"
 		end
 	end
 end

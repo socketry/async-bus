@@ -95,6 +95,59 @@ describe Async::Bus::Controller do
 				end
 			end
 		end
+		
+		with "a controller that accepts a proxy as an argument" do
+			class RegistrationController < Async::Bus::Controller
+				def initialize
+					@registered = []
+				end
+				
+				attr :registered
+				
+				def register(worker, id:)
+					@registered << {worker: worker, id: id}
+					true
+				end
+			end
+			
+			class WorkerController < Async::Bus::Controller
+				def hello
+					"hello"
+				end
+			end
+			
+			let(:registration_controller) {RegistrationController.new}
+			
+			def before
+				super
+				
+				@server_task = Async do
+					server_instance.accept do |connection|
+						connection.bind(:registration, registration_controller)
+					end
+				end
+			end
+			
+			def after(error = nil)
+				@server_task.stop
+				super
+			end
+			
+			it "can pass a proxy as an argument" do
+				client_instance.connect do |connection|
+					registration = connection[:registration]
+					
+					worker_controller = WorkerController.new
+					worker_proxy = connection.bind(:worker, worker_controller)
+					
+					result = registration.register(worker_proxy, id: "worker-1")
+					
+					expect(result).to be == true
+					expect(registration_controller.registered.size).to be == 1
+					expect(registration_controller.registered.first[:id]).to be == "worker-1"
+				end
+			end
+		end
 	end
 end
 

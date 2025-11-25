@@ -11,6 +11,12 @@ module Async
 		module Protocol
 			# Represents a method invocation.
 			class Invoke
+				# Initialize a new invocation message.
+				# @parameter id [Integer] The transaction ID.
+				# @parameter name [Symbol] The method name to invoke.
+				# @parameter arguments [Array] The positional arguments.
+				# @parameter options [Hash] The keyword arguments.
+				# @parameter block_given [Boolean] Whether a block was provided.
 				def initialize(id, name, arguments, options, block_given)
 					@id = id
 					@name = name
@@ -19,12 +25,23 @@ module Async
 					@block_given = block_given
 				end
 				
+				# @attribute [Integer] The transaction ID.
 				attr :id
+				
+				# @attribute [Symbol] The method name.
 				attr :name
+				
+				# @attribute [Array] The positional arguments.
 				attr :arguments
+				
+				# @attribute [Hash] The keyword arguments.
 				attr :options
+				
+				# @attribute [Boolean] Whether a block was provided.
 				attr :block_given
 				
+				# Pack the invocation into a MessagePack packer.
+				# @parameter packer [MessagePack::Packer] The packer to write to.
 				def pack(packer)
 					packer.write(@id)
 					packer.write(@name)
@@ -43,6 +60,9 @@ module Async
 					packer.write(@block_given)
 				end
 				
+				# Unpack an invocation from a MessagePack unpacker.
+				# @parameter unpacker [MessagePack::Unpacker] The unpacker to read from.
+				# @returns [Invoke] A new invocation instance.
 				def self.unpack(unpacker)
 					id = unpacker.read
 					name = unpacker.read
