@@ -213,5 +213,160 @@ describe Async::Bus::Protocol::Connection do
 			end
 		end
 	end
+	
+	with "#[]=" do
+		it "can bind objects explicitly" do
+			server_connection = nil
+			
+			start_server do |connection|
+				server_connection = connection
+				object = Object.new
+				connection[:test] = object
+			end
+			
+			client.connect do |connection|
+				# Connect to trigger server's accept block
+				expect(server_connection.objects[:test]).to be_a(Async::Bus::Protocol::Connection::Explicit)
+				expect(server_connection.objects[:test].object).to be_a(Object)
+				expect(server_connection.objects[:test]).not.to be(:temporary?)
+			end
+		end
+	end
+	
+	with "#run" do
+		it "handles unexpected messages" do
+			error_logged = false
+			error_args = nil
+			
+			# Intercept Console.error to verify it's called
+			original_error = Console.method(:error)
+			Console.define_singleton_method(:error) do |*args|
+				error_logged = true
+				error_args = args
+				original_error.call(*args)
+			end
+			
+			begin
+				# Create a connection directly with a mock peer
+				peer = StringIO.new
+				connection = Async::Bus::Protocol::Connection.server(peer)
+				connection.bind(:test, Object.new)
+				
+				# Create an unexpected message object
+				unexpected_message = Object.new
+				
+				# Mock the unpacker to yield the unexpected message
+				original_unpacker = connection.instance_variable_get(:@unpacker)
+				mock_enumerator = Enumerator.new do |yielder|
+					yielder.yield(unexpected_message)
+					# Raise to stop the loop
+					raise IOError, "End of stream"
+				end
+				
+				connection.instance_variable_set(:@unpacker, mock_enumerator)
+				
+				# Run the connection in a task
+				task = Async do
+					begin
+						connection.run
+					rescue IOError
+						# Expected when enumerator raises
+					end
+				end
+				
+				# Wait for it to process
+				sleep(0.05)
+				
+				# Stop the task
+				task.stop
+				
+				expect(error_logged).to be_truthy
+				expect(error_args).not.to be_nil
+			ensure
+				# Restore original Console.error
+				Console.define_singleton_method(:error, original_error)
+			end
+		end
+		
+		it "closes pending transactions in ensure block when run loop exits" do
+			transactions_closed_count = 0
+			
+			# Create a connection directly to test the ensure block
+			peer = StringIO.new
+			connection = Async::Bus::Protocol::Connection.server(peer)
+			
+			# Create some transactions manually
+			transaction1 = connection.transaction!
+			transaction2 = connection.transaction!
+			
+			# Mock transaction.close to track calls
+			[transaction1, transaction2].each do |transaction|
+				original_close = transaction.method(:close)
+				transaction.define_singleton_method(:close) do
+					transactions_closed_count += 1
+					original_close.call
+				end
+			end
+			
+			# Verify transactions exist
+			expect(connection.transactions.size).to be == 2
+			
+			# Mock the unpacker to immediately raise (simulating connection close)
+			# This will trigger the ensure block
+			mock_enumerator = Enumerator.new do |yielder|
+				raise IOError, "Connection closed"
+			end
+			
+			connection.instance_variable_set(:@unpacker, mock_enumerator)
+			
+			# Run the connection - it will immediately hit the error and run ensure block
+			task = Async do
+				begin
+					connection.run
+				rescue IOError
+					# Expected
+				end
+			end
+			
+			# Wait for it to process
+			sleep(0.05)
+			
+			# Stop the task
+			task.stop
+			
+			# Verify transactions were closed in ensure block
+			expect(transactions_closed_count).to be == 2
+			expect(connection.transactions).to be(:empty?)
+		end
+		
+		it "closes pending transactions on connection close" do
+			start_server do |connection|
+				service = Object.new
+				def service.slow_method
+					sleep(0.1)
+					:result
+				end
+				
+				connection.bind(:service, service)
+			end
+			
+			client.connect do |connection|
+				# Start a transaction
+				transaction = connection.transaction!
+				
+				# Start an async call that will take time
+				Async do
+					connection[:service].slow_method
+				end
+				
+				# Close the connection immediately
+				connection.close
+				
+				# Verify transaction was closed
+				expect(transaction.connection).to be_nil
+				expect(transaction.received).to be(:closed?)
+			end
+		end
+	end
 end
 

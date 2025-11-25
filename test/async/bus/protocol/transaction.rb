@@ -174,6 +174,68 @@ describe Async::Bus::Protocol::Transaction do
 				expect(write_count).to be > 0
 			end
 		end
+		
+		it "handles Close message in yield block to break iteration" do
+			start_server do |connection|
+				service = Object.new
+				def service.yielding_method
+					yield 1
+					yield 2
+					yield 3
+					:done
+				end
+				
+				connection.bind(:service, service)
+			end
+			
+			client.connect do |connection|
+				results = []
+				
+				# Create a transaction and manually handle yields to send Close
+				transaction = connection.transaction!
+				transaction.invoke(:service, [:yielding_method], {}) do |*yield_args|
+					value = yield_args.first
+					results << value
+					
+					# After first yield, send Close to break the loop
+					if results.size == 1
+						connection.write(Async::Bus::Protocol::Close.new(transaction.id, nil))
+					end
+					
+					:ack
+				end
+				
+				# Close should break the loop, so we should only get one value
+				expect(results.size).to be == 1
+				expect(results.first).to be == 1
+			end
+		end
+		
+		it "handles Throw message from server" do
+			start_server do |connection|
+				service = Object.new
+				def service.throw_method
+					throw :some_tag
+				end
+				
+				connection.bind(:service, service)
+			end
+			
+			client.connect do |connection|
+				# The server should catch the UncaughtThrowError and send a Throw message
+				# The client should handle it by re-throwing
+				# Note: UncaughtThrowError only preserves the tag, not the value
+				thrown = false
+				result = catch(:some_tag) do
+					connection[:service].throw_method
+					thrown = true
+				end
+				
+				# catch returns nil when throw happens without a value
+				expect(thrown).to be == false
+				expect(result).to be_nil
+			end
+		end
 	end
 end
 

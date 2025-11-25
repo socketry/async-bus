@@ -90,21 +90,26 @@ module Async
 					
 					self.write(Invoke.new(@id, name, arguments, options, block_given?))
 					
-					while response = self.read
-						case response
-						when Return
-							return response.result
-						when Yield
-							begin
-								result = yield(*response.result)
-								self.write(Next.new(@id, result))
-							rescue => error
-								self.write(Error.new(@id, error))
-							end
-						when Error
-							raise(response.result)
+				while response = self.read
+					case response
+					when Return
+						return response.result
+					when Yield
+						begin
+							result = yield(*response.result)
+							self.write(Next.new(@id, result))
+						rescue => error
+							self.write(Error.new(@id, error))
 						end
+					when Error
+						raise(response.result)
+					when Throw
+						# Re-throw the tag and value that was thrown on the server side
+						# Throw.result contains [tag, value] array
+						tag, value = response.result
+						throw(tag, value)
 					end
+				end
 				end
 				
 				# Accept a remote procedure invocation.
@@ -134,7 +139,9 @@ module Async
 					
 					self.write(Return.new(@id, result))
 				rescue UncaughtThrowError => error
-					self.write(Throw.new(@id, error.tag))
+					# UncaughtThrowError has both tag and value attributes
+					# Store both in the Throw message: result is tag, we'll add value handling
+					self.write(Throw.new(@id, [error.tag, error.value]))
 				rescue => error
 					self.write(Error.new(@id, error))
 				end
