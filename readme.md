@@ -1,14 +1,15 @@
 # Async::Bus
 
-Provides a client and server implementation for asynchronous message buses in Ruby.
+When building distributed systems or multi-process applications, you need a way for processes to communicate and invoke methods on objects in other processes. `async-bus` provides a lightweight message-passing system for inter-process communication (IPC) using Unix domain sockets, enabling transparent remote procedure calls (RPC) where remote objects feel like local objects.
+
+Use `async-bus` when you need:
+
+- **Inter-process communication**: Connect multiple Ruby processes running on the same machine.
+- **Transparent RPC**: Call methods on remote objects as if they were local.
+- **Type-safe serialization**: Automatically serialize and deserialize Ruby objects using MessagePack.
+- **Asynchronous operations**: Non-blocking message passing built on the Async framework.
 
 [![Development Status](https://github.com/socketry/async-bus/workflows/Test/badge.svg)](https://github.com/socketry/async-bus/actions?workflow=Test)
-
-## Features
-
-  - Serialization of (rich) Ruby objects using [MessagePack](https://msgpack.org/).
-      - Asynchronous Remote Procedure Calls (RPC) with timeouts.
-  - Automatic client and server reconnection handling.
 
 ## Usage
 
