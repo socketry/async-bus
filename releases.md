@@ -1,6 +1,6 @@
 # Releases
 
-## Unreleased
+## v0.3.1
 
   - `Client#run` now returns an `Async::Task` (as it did in earlier releases).
 

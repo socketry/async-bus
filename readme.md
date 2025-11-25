@@ -23,6 +23,10 @@ Please see the [project documentation](https://socketry.github.io/async-bus/) fo
 
 Please see the [project releases](https://socketry.github.io/async-bus/releases/index) for all releases.
 
+### v0.3.1
+
+  - `Client#run` now returns an `Async::Task` (as it did in earlier releases).
+
 ### v0.3.0
 
   - Add support for multi-hop proxying.
