@@ -162,5 +162,56 @@ describe Async::Bus::Protocol::Connection do
 			end
 		end
 	end
+	
+	with "proxy garbage collection" do
+		it "sends release message when proxy is garbage collected" do
+			temporary_object = Object.new
+			server_connection = nil
+			
+			# Controller that returns an implicitly bound object
+			controller = Class.new(Async::Bus::Controller) do
+				def initialize(connection, temporary_object)
+					@connection = connection
+					@temporary_object = temporary_object
+				end
+				
+				def get_temporary_object
+					# Create an implicit binding and return the proxy:
+					@connection.proxy(@temporary_object)
+				end
+			end
+			
+			start_server do |connection|
+				server_connection = connection
+				controller_instance = controller.new(connection, temporary_object)
+				connection.bind(:controller, controller_instance)
+			end
+			
+			client.connect do |connection|
+				controller_proxy = connection[:controller]
+				
+				# Get the proxy to the temporary object
+				temporary_proxy = controller_proxy.get_temporary_object
+				name = temporary_proxy.__name__
+				
+				# Verify the object exists on the server and is marked as temporary
+				expect(server_connection.objects).to have_keys(name)
+				expect(server_connection.objects[name]).to be(:temporary?)
+				
+				temporary_proxy = nil
+				
+				# Give some time for the finalizer to run:
+				10.times do
+					GC.start
+					Fiber.scheduler.yield
+					
+					# Break as soon as the object is no longer in the server's objects:
+					break unless server_connection.objects.key?(name)
+				end
+
+				expect(server_connection.objects).not.to have_keys(name)
+			end
+		end
+	end
 end
 
