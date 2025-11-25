@@ -4,10 +4,10 @@ When building distributed systems or multi-process applications, you need a way 
 
 Use `async-bus` when you need:
 
-- **Inter-process communication**: Connect multiple Ruby processes running on the same machine.
-- **Transparent RPC**: Call methods on remote objects as if they were local.
-- **Type-safe serialization**: Automatically serialize and deserialize Ruby objects using MessagePack.
-- **Asynchronous operations**: Non-blocking message passing built on the Async framework.
+  - **Inter-process communication**: Connect multiple Ruby processes running on the same machine.
+  - **Transparent RPC**: Call methods on remote objects as if they were local.
+  - **Type-safe serialization**: Automatically serialize and deserialize Ruby objects using MessagePack.
+  - **Asynchronous operations**: Non-blocking message passing built on the Async framework.
 
 [![Development Status](https://github.com/socketry/async-bus/workflows/Test/badge.svg)](https://github.com/socketry/async-bus/actions?workflow=Test)
 
@@ -15,9 +15,20 @@ Use `async-bus` when you need:
 
 Please see the [project documentation](https://socketry.github.io/async-bus/) for more details.
 
+  - [Getting Started](https://socketry.github.io/async-bus/guides/getting-started/index) - This guide explains how to get started with `async-bus` to build asynchronous message-passing systems with transparent remote procedure calls in Ruby.
+
+  - [Controllers](https://socketry.github.io/async-bus/guides/controllers/index) - This guide explains how to use controllers in `async-bus` to build explicit remote interfaces with pass-by-reference semantics, enabling bidirectional communication and shared state across connections.
+
 ## Releases
 
 Please see the [project releases](https://socketry.github.io/async-bus/releases/index) for all releases.
+
+### v0.3.0
+
+  - Add support for multi-hop proxying.
+  - Fix proxying of throw/catch value.
+  - `Client#run` now takes a block.
+  - `Server#run` delegates to `Server#connected!`.
 
 ### v0.2.0
 

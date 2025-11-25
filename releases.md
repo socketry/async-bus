@@ -1,6 +1,6 @@
 # Releases
 
-## Unreleased
+## v0.3.0
 
   - Add support for multi-hop proxying.
   - Fix proxying of throw/catch value.

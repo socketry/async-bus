@@ -1,0 +1,17 @@
+# Automatically generated context index for Utopia::Project guides.
+# Do not edit then files in this directory directly, instead edit the guides and then run `bake utopia:project:agent:context:update`.
+---
+description: Transparent Ruby IPC over an asynchronous message bus.
+metadata:
+  documentation_uri: https://socketry.github.io/async-bus/
+  source_code_uri: https://github.com/socketry/async-bus.git
+files:
+- path: getting-started.md
+  title: Getting Started
+  description: This guide explains how to get started with `async-bus` to build asynchronous
+    message-passing systems with transparent remote procedure calls in Ruby.
+- path: controllers.md
+  title: Controllers
+  description: This guide explains how to use controllers in `async-bus` to build
+    explicit remote interfaces with pass-by-reference semantics, enabling bidirectional
+    communication and shared state across connections.
