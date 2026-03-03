@@ -24,10 +24,8 @@ describe Async::Bus::Server do
 	
 	with "#bind" do
 		it "can receive incoming clients and expose a bound object" do
-			server_task = Async do
-				server.accept do |connection|
-					connection.bind(:object, Object.new)
-				end
+			start_server do |connection|
+				connection.bind(:object, Object.new)
 			end
 			
 			client.connect do |connection|
@@ -39,20 +37,10 @@ describe Async::Bus::Server do
 	with "a bound Array instance" do
 		let(:array) {Array.new}
 		
-		def before
-			super
-			
-			@server_task = Async do
-				server.accept do |connection|
-					connection.bind(:array, array)
-				end
+		before do
+			start_server do |connection|
+				connection.bind(:array, array)
 			end
-		end
-		
-		def after(error = nil)
-			@server_task.stop
-			
-			super
 		end
 		
 		it "can add items to the array" do

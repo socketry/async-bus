@@ -324,6 +324,8 @@ module Async
 							Console.error(self, "Unexpected message:", message)
 						end
 					end
+				rescue IOError, EOFError
+					# Connection closed - this is normal, not an error.
 				ensure
 					finalizer_task&.stop
 					

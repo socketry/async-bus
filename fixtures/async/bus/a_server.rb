@@ -30,8 +30,13 @@ module Async
 			end
 			
 			after do
+				if server_task = @server_task
+					@server_task = nil
+					server_task.stop
+					server_task.wait
+				end
+				
 				@bound_endpoint&.close
-				@server_task&.stop
 			end
 			
 			let(:server) {Async::Bus::Server.new(@bound_endpoint)}
