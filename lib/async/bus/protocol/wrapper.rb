@@ -34,39 +34,39 @@ module Async
 					# The order here matters.
 					
 					self.register_type(0x00, Invoke, recursive: true,
-							packer: ->(invoke, packer){invoke.pack(packer)},
-							unpacker: ->(unpacker){Invoke.unpack(unpacker)},
-						)
+						packer: ->(invoke, packer){invoke.pack(packer)},
+						unpacker: ->(unpacker){Invoke.unpack(unpacker)},
+					)
 					
 					[Return, Yield, Error, Next, Throw, Close].each_with_index do |klass, index|
 						self.register_type(0x01 + index, klass, recursive: true,
-								packer: ->(value, packer){value.pack(packer)},
-								unpacker: ->(unpacker){klass.unpack(unpacker)},
-							)
+							packer: ->(value, packer){value.pack(packer)},
+							unpacker: ->(unpacker){klass.unpack(unpacker)},
+						)
 					end
 					
 					# Reverse serialize proxies back into proxies:
 					# When a Proxy is received, use proxy_object to handle reverse lookup
 					self.register_type(0x10, Proxy, recursive: true,
-							packer: self.method(:pack_proxy),
-							unpacker: self.method(:unpack_proxy),
-						)
+						packer: self.method(:pack_proxy),
+						unpacker: self.method(:unpack_proxy),
+					)
 					
 					self.register_type(0x11, Release, recursive: true,
-							packer: ->(release, packer){release.pack(packer)},
-							unpacker: ->(unpacker){Release.unpack(unpacker)},
-						)
+						packer: ->(release, packer){release.pack(packer)},
+						unpacker: ->(unpacker){Release.unpack(unpacker)},
+					)
 					
 					self.register_type(0x20, Symbol)
 					self.register_type(0x21, Exception, recursive: true,
-							packer: self.method(:pack_exception),
-							unpacker: self.method(:unpack_exception),
-						)
+						packer: self.method(:pack_exception),
+						unpacker: self.method(:unpack_exception),
+					)
 					
 					self.register_type(0x22, Class,
-							packer: ->(klass){klass.name},
-							unpacker: ->(name){Object.const_get(name)},
-						)
+						packer: ->(klass){klass.name},
+						unpacker: ->(name){Object.const_get(name)},
+					)
 					
 					reference_packer = self.method(:pack_reference)
 					reference_unpacker = self.method(:unpack_reference)
@@ -74,9 +74,9 @@ module Async
 					# Serialize objects into proxies:
 					reference_types&.each_with_index do |klass, index|
 						self.register_type(0x30 + index, klass, recursive: true,
-								packer: reference_packer,
-								unpacker: reference_unpacker,
-							)
+							packer: reference_packer,
+							unpacker: reference_unpacker,
+						)
 					end
 				end
 				

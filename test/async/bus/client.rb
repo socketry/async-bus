@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Released under the MIT License.
-# Copyright, 2021-2025, by Samuel Williams.
+# Copyright, 2025-2026, by Samuel Williams.
 
 require "async/bus/a_server"
 
@@ -50,7 +50,7 @@ describe Async::Bus::Client do
 		it "reconnects after connection failure" do
 			connected_count = {value: 0}
 			connection_count = {value: 0}
-
+			
 			# Start server, then stop it after first connection
 			start_server do |connection|
 				connection.bind(:test, Object.new)
@@ -95,7 +95,7 @@ describe Async::Bus::Client do
 		
 		it "does not leak tasks when connected! creates tasks and reconnection occurs" do
 			events = Thread::Queue.new
-
+			
 			start_server do |connection|
 				connection.bind(:test, Object.new)
 			end
@@ -136,7 +136,7 @@ describe Async::Bus::Client do
 		
 		it "handles connection errors gracefully" do
 			error_count = {value: 0}
-
+			
 			start_server do |connection|
 				connection.bind(:test, Object.new)
 			end
