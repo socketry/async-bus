@@ -65,8 +65,11 @@ module Async
 			#
 			# @yields {|connection| ...} If a block is given, it will be called with the connection.
 			# @returns [Async::Task] The task that runs the client.
-			def run(&block)
-				Async(transient: true) do |task|
+			def run(**options, &block)
+				# This is the default behaviour:
+				options[:transient] = true unless options.key?(:transient)
+				
+				Async(**options) do |task|
 					loop do
 						connection = connect!
 						
