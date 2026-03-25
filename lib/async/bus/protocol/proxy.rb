@@ -73,6 +73,12 @@ module Async
 				def inspect
 					"#<proxy #{@name}>"
 				end
+				
+				# Return the instance variables to inspect.
+				# @returns [Array] The instance variables to inspect.
+				def instance_variables_to_inspect
+					[]
+				end
 			end
 		end
 	end
