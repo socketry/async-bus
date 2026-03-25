@@ -6,7 +6,4 @@
 /.covered.db
 /external
 
-# rspec failure tracking
-.rspec_status
-
-/gems.locked
+*.ipc
