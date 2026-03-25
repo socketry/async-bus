@@ -120,9 +120,20 @@ module Async
 				def accept(object, arguments, options, block_given)
 					if block_given
 						result = object.public_send(*arguments, **options) do |*yield_arguments|
-							self.write(Yield.new(@id, yield_arguments))
+							begin
+								self.write(Yield.new(@id, yield_arguments))
+							rescue IOError, EOFError, RuntimeError => error
+								# Connection closed or transaction closed - can't send yield
+								# Break out of the iteration since we can't communicate
+								break
+							end
 							
-							response = self.read
+							begin
+								response = self.read
+							rescue ClosedQueueError, IOError, EOFError
+								# Connection closed - can't receive response
+								break
+							end
 							
 							case response
 							when Next
@@ -137,13 +148,28 @@ module Async
 						result = object.public_send(*arguments, **options)
 					end
 					
-					self.write(Return.new(@id, result))
+					begin
+						self.write(Return.new(@id, result))
+					rescue IOError, EOFError, RuntimeError => error
+						# Connection closed or transaction closed - can't send return
+						# This is expected when connection terminates mid-transaction
+					end
 				rescue UncaughtThrowError => error
 					# UncaughtThrowError has both tag and value attributes
 					# Store both in the Throw message: result is tag, we'll add value handling
-					self.write(Throw.new(@id, [error.tag, error.value]))
+					begin
+						self.write(Throw.new(@id, [error.tag, error.value]))
+					rescue IOError, EOFError, RuntimeError
+						# Connection closed or transaction closed - can't send throw
+						# This is expected when connection terminates mid-transaction
+					end
 				rescue => error
-					self.write(Error.new(@id, error))
+					begin
+						self.write(Error.new(@id, error))
+					rescue IOError, EOFError, RuntimeError
+						# Connection closed or transaction closed - can't send error
+						# This is expected when connection terminates mid-transaction
+					end
 				end
 			end
 		end
