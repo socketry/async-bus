@@ -4,6 +4,7 @@
 
   - Fix handling of inspect on Ruby 4+.
   - `Client#run(**options)` are passed through to `Async(**options)`.
+  - On the server side, if a transaction raises an exception, ignore the exception if the connection is closed.
 
 ## v0.3.1
 

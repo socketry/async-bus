@@ -211,6 +211,26 @@ describe Async::Bus::Protocol::Transaction do
 			end
 		end
 		
+		it "does not raise when connection is closed before error can be written" do
+			connection = Async::Bus::Protocol::Connection.new(StringIO.new, 1)
+			transaction = connection.transaction!
+			
+			service = Object.new
+			def service.error_method
+				raise IOError, "Connection reset by peer"
+			end
+			
+			# Simulate the connection being torn down (e.g. by an EOFError on the
+			# read loop) before the rescue block in #accept has a chance to write
+			# the Error response back.  Without the `if @connection` guard this
+			# would raise a RuntimeError ("Transaction is closed!").
+			transaction.close
+			
+			expect do
+				transaction.accept(service, [:error_method], {}, false)
+			end.not.to raise_exception
+		end
+		
 		it "handles Throw message from server" do
 			start_server do |connection|
 				service = Object.new

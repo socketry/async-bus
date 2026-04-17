@@ -143,7 +143,12 @@ module Async
 					# Store both in the Throw message: result is tag, we'll add value handling
 					self.write(Throw.new(@id, [error.tag, error.value]))
 				rescue => error
-					self.write(Error.new(@id, error))
+					# In some cases, the connection may be closed by the time we get here:
+					if @connection
+						self.write(Error.new(@id, error))
+					else
+						Console.debug(self, "Connection is closed, ignoring error:", exception: error)
+					end
 				end
 			end
 		end
