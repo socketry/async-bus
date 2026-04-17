@@ -1,0 +1,3 @@
+async-service-supervisor:
+  url: http://github.com/socketry/async-service-supervisor
+  command: bundle exec bake test
