@@ -1,6 +1,6 @@
 # Releases
 
-## Unreleased
+## v0.4.0
 
   - Fix handling of inspect on Ruby 4+.
   - `Client#run(**options)` are passed through to `Async(**options)`.

@@ -23,6 +23,12 @@ Please see the [project documentation](https://socketry.github.io/async-bus/) fo
 
 Please see the [project releases](https://socketry.github.io/async-bus/releases/index) for all releases.
 
+### v0.4.0
+
+  - Fix handling of inspect on Ruby 4+.
+  - `Client#run(**options)` are passed through to `Async(**options)`.
+  - On the server side, if a transaction raises an exception, ignore the exception if the connection is closed.
+
 ### v0.3.1
 
   - `Client#run` now returns an `Async::Task` (as it did in earlier releases).
