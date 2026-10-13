@@ -21,6 +21,56 @@ describe Async::Bus::Protocol::Connection do
 				connection.write(Async::Bus::Protocol::Return.new(1, :result))
 			end.to raise_exception(IOError, message: be =~ /Write error/)
 		end
+		
+		it "does not interleave concurrent writes" do
+			start_server do |connection|
+				service = Object.new
+				
+				def service.echo(value)
+					value
+				end
+				
+				connection.bind(:service, service)
+			end
+			
+			client.connect do |connection|
+				connection.timeout = 1
+				
+				# Each message is larger than the socket buffer, so writing it will yield to other tasks:
+				messages = 4.times.map{|index| index.to_s * 1024 * 1024}
+				
+				tasks = messages.map do |message|
+					Async {connection[:service].echo(message)}
+				end
+				
+				expect(tasks.map(&:wait)).to be == messages
+			end
+		end
+		
+		it "completes a partial write when the task is cancelled" do
+			start_server do |connection|
+				service = Object.new
+				
+				def service.echo(value)
+					value
+				end
+				
+				connection.bind(:service, service)
+			end
+			
+			client.connect do |connection|
+				connection.timeout = 1
+				
+				# The message is larger than the socket buffer, so the task will be blocked writing it:
+				task = Async{connection[:service].echo("x" * 1024 * 1024)}
+				expect(task).to be(:running?)
+				
+				task.cancel
+				
+				# If the partial write was abandoned, the stream would be corrupt:
+				expect(connection[:service].echo(:result)).to be == :result
+			end
+		end
 	end
 	
 	with "#invoke" do

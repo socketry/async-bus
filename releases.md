@@ -1,5 +1,10 @@
 # Releases
 
+## Unreleased
+
+  - Serialize writes to the connection, so that concurrent messages larger than the socket buffer are no longer interleaved, which corrupted the stream.
+  - Complete a partial write when the writing task is cancelled, as an incomplete message would corrupt the stream.
+
 ## v0.4.0
 
   - Fix handling of inspect on Ruby 4+.

@@ -52,6 +52,7 @@ module Async
 					@wrapper = wrapper.new(self)
 					@unpacker = @wrapper.unpacker(peer)
 					@packer = @wrapper.packer(peer)
+					@writing = ::Thread::Mutex.new
 					
 					@timeout = timeout
 					
@@ -67,15 +68,26 @@ module Async
 				
 				# Flush the packer buffer.
 				def flush
-					@packer.flush
+					@writing.synchronize do
+						Task.current.defer_cancel do
+							@packer.flush
+						end
+					end
 				end
 				
 				# Write a message to the connection.
+				#
+				# Writes are serialized, as the packer buffer is shared and may yield to other tasks while flushing to the peer. Once started, a write is completed even if the task is cancelled, as a partially written message would corrupt the stream.
+				#
 				# @parameter message [Object] The message to write.
 				def write(message)
 					# $stderr.puts "Writing: #{message.inspect}"
-					@packer.write(message)
-					@packer.flush
+					@writing.synchronize do
+						Task.current.defer_cancel do
+							@packer.write(message)
+							@packer.flush
+						end
+					end
 				end
 				
 				# Close the connection and clean up resources.
